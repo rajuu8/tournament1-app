@@ -1,0 +1,50 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'apk-build/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install dependencies
+        working-directory: ./apk-build
+        run: npm install
+
+      - name: Add Android platform
+        working-directory: ./apk-build
+        run: |
+          npx cap add android || true
+          npx cap sync android
+
+      - name: Grant execute permission for gradlew
+        working-directory: ./apk-build/android
+        run: chmod +x gradlew
+
+      - name: Build Debug APK
+        working-directory: ./apk-build/android
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: battlezone-arena-apk
+          path: apk-build/android/app/build/outputs/apk/debug/app-debug.apk
