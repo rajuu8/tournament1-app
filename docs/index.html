@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>BattleZone Arena</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Saira+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root{
+    --bg-void: #0a0b0f;
+    --bg-panel: #14161d;
+    --bg-card: #1b1e28;
+    --line: #2a2e3a;
+    --flame: #ff4d2e;
+    --flame-dim: #ff4d2e33;
+    --cyan: #2ee6d6;
+    --cyan-dim: #2ee6d633;
+    --gold: #ffc23c;
+    --text-hi: #f4f5f7;
+    --text-mid: #9aa0ad;
+    --text-low: #5b6170;
+    --danger: #ff3b5c;
+    --success: #3ddc84;
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+
+  body{
+    background: var(--bg-void);
+    background-image:
+      radial-gradient(circle at 15% 0%, #ff4d2e14, transparent 40%),
+      radial-gradient(circle at 85% 20%, #2ee6d614, transparent 40%);
+    color: var(--text-hi);
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  h1,h2,h3, .display{
+    font-family: 'Saira Condensed', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  /* ---------- App shell ---------- */
+  #app{ max-width: 480px; margin: 0 auto; min-height: 100vh; position: relative; padding-bottom: 84px; }
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 18px 16px 14px;
+    position: sticky; top:0; z-index: 50;
+    background: linear-gradient(180deg, var(--bg-void) 70%, transparent);
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand-mark{
+    width:36px;height:36px; border-radius:9px;
+    background: linear-gradient(135deg, var(--flame), #ff8a3c);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow: 0 0 18px var(--flame-dim);
+    font-weight:800;
+  }
+  .brand-name{ font-family:'Saira Condensed'; font-weight:800; font-size:19px; letter-spacing:0.03em; text-transform:uppercase; }
+  .brand-name span{ color: var(--flame); }
+  .wallet-chip{
+    display:flex; align-items:center; gap:6px;
+    background: var(--bg-card); border:1px solid var(--line);
+    padding:7px 12px; border-radius:20px; font-weight:700; font-size:13px;
+  }
+  .wallet-chip i{ color: var(--gold); }
+
+  /* ---------- Game selector tabs ---------- */
+  .game-tabs{ display:flex; gap:10px; padding: 4px 16px 18px; }
+  .game-tab{
+    flex:1; position:relative; border-radius:14px; padding:14px 12px;
+    border:1px solid var(--line); background: var(--bg-card);
+    text-align:left; cursor:pointer; transition: all .2s ease;
+    overflow:hidden;
+  }
+  .game-tab.active{ border-color: var(--flame); box-shadow: 0 0 0 1px var(--flame), 0 8px 24px -8px var(--flame-dim); }
+  .game-tab.active.pubg{ border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan), 0 8px 24px -8px var(--cyan-dim); }
+  .game-tab .gname{ font-family:'Saira Condensed'; font-weight:700; font-size:15px; text-transform:uppercase; }
+  .game-tab .gsub{ font-size:11px; color:var(--text-mid); margin-top:2px; }
+  .game-tab .gicon{ position:absolute; right:10px; top:10px; font-size:22px; opacity:0.18; }
+  .game-tab.active .gicon{ opacity:0.5; color: var(--flame); }
+  .game-tab.active.pubg .gicon{ color: var(--cyan); }
+
+  /* ---------- Section label ---------- */
+  .section-label{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 6px 16px 12px;
+  }
+  .section-label h2{ font-size:17px; color:var(--text-hi); display:flex; align-items:center; gap:8px; }
+  .section-label h2 i{ color: var(--flame); font-size:14px; }
+  .section-label .count{ font-size:12px; color:var(--text-mid); font-weight:600; }
+
+  /* ---------- Tournament card ---------- */
+  .t-list{ display:flex; flex-direction:column; gap:14px; padding: 0 16px 8px; }
+
+  .t-card{
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    transition: transform .15s ease, border-color .15s ease;
+  }
+  .t-card:active{ transform: scale(0.98); }
+  .t-card.live{ border-color: var(--success); }
+
+  .t-card-top{
+    padding: 14px 14px 12px;
+    display:flex; justify-content:space-between; align-items:flex-start;
+  }
+  .t-tag{
+    display:inline-flex; align-items:center; gap:5px;
+    font-size: 10.5px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase;
+    padding: 3px 9px; border-radius: 20px;
+  }
+  .t-tag.free{ background: var(--cyan-dim); color: var(--cyan); }
+  .t-tag.paid{ background: #ffc23c22; color: var(--gold); }
+  .t-tag.live{ background: #3ddc8422; color: var(--success); }
+  .t-tag.live i{ animation: blink 1.2s infinite; }
+  @keyframes blink{ 50%{opacity:0.3;} }
+
+  .t-title{ font-family:'Saira Condensed'; font-weight:700; font-size:18px; margin-top:8px; text-transform:none; letter-spacing:0; }
+  .t-meta{ display:flex; gap:14px; margin-top:8px; font-size:12.5px; color:var(--text-mid); }
+  .t-meta span{ display:flex; align-items:center; gap:5px; }
+  .t-meta i{ font-size:11px; color: var(--text-low); }
+
+  .t-prize{ text-align:right; }
+  .t-prize .amt{ font-family:'Saira Condensed'; font-weight:800; font-size:20px; color: var(--gold); }
+  .t-prize .lbl{ font-size:9.5px; color:var(--text-low); text-transform:uppercase; letter-spacing:0.04em; }
+
+  .t-card-bottom{
+    padding: 11px 14px; background: #00000030;
+    border-top: 1px solid var(--line);
+    display:flex; align-items:center; gap:12px;
+  }
+  .slot-bar{ flex:1; height:6px; background: var(--line); border-radius:4px; overflow:hidden; }
+  .slot-fill{ height:100%; background: linear-gradient(90deg, var(--flame), var(--gold)); border-radius:4px; }
+  .slot-text{ font-size:11.5px; font-weight:700; color: var(--text-mid); white-space:nowrap; }
+  .join-btn{
+    background: var(--flame); color:#fff; border:none; border-radius:9px;
+    padding: 7px 16px; font-weight:700; font-size:12.5px; text-transform:uppercase;
+    font-family:'Rajdhani'; letter-spacing:0.03em;
+  }
+  .join-btn.full{ background: var(--line); color: var(--text-low); }
+  .join-btn.joined{ background: var(--success); color:#06140c; }
+
+  .empty-state{
+    text-align:center; padding: 50px 20px; color: var(--text-mid);
+  }
+  .empty-state i{ font-size:40px; color: var(--line); margin-bottom:14px; display:block; }
+
+  /* ---------- Bottom nav ---------- */
+  .bottom-nav{
+    position: fixed; bottom:0; left:50%; transform: translateX(-50%);
+    width: 100%; max-width:480px;
+    background: var(--bg-panel); border-top:1px solid var(--line);
+    display:flex; padding: 10px 8px calc(10px + env(safe-area-inset-bottom));
+    z-index: 100;
+  }
+  .nav-item{
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;
+    color: var(--text-low); font-size:10.5px; font-weight:700; text-transform:uppercase;
+    background:none; border:none; padding:4px;
+  }
+  .nav-item i{ font-size:18px; }
+  .nav-item.active{ color: var(--flame); }
+
+  /* ---------- Auth screen ---------- */
+  .auth-screen{ padding: 60px 24px 24px; }
+  .auth-logo{ text-align:center; margin-bottom: 36px; }
+  .auth-logo .brand-mark{ width:64px;height:64px; margin: 0 auto 14px; font-size:26px; border-radius:16px; }
+  .auth-logo h1{ font-size:26px; }
+  .auth-logo p{ color: var(--text-mid); font-size:13px; margin-top:4px; }
+
+  .field{ margin-bottom: 14px; }
+  .field label{ font-size:12px; color: var(--text-mid); font-weight:700; text-transform:uppercase; letter-spacing:0.03em; display:block; margin-bottom:6px; }
+  .field input, .field select{
+    width:100%; background: var(--bg-card); border:1px solid var(--line);
+    border-radius:10px; padding: 13px 14px; color: var(--text-hi);
+    font-family:'Rajdhani'; font-size:15px; font-weight:600;
+  }
+  .field input:focus, .field select:focus{ outline:none; border-color: var(--flame); }
+
+  .primary-btn{
+    width:100%; background: linear-gradient(135deg, var(--flame), #ff7a3c);
+    color:#fff; border:none; border-radius:11px; padding:15px;
+    font-family:'Saira Condensed'; font-weight:700; font-size:15px;
+    text-transform:uppercase; letter-spacing:0.04em; margin-top:8px;
+    box-shadow: 0 8px 20px -8px var(--flame-dim);
+  }
+  .ghost-btn{
+    width:100%; background: transparent; color: var(--text-mid);
+    border:1px solid var(--line); border-radius:11px; padding:13px;
+    font-family:'Rajdhani'; font-weight:700; font-size:13.5px; margin-top:10px;
+  }
+  .switch-link{ text-align:center; margin-top:20px; font-size:13px; color: var(--text-mid); }
+  .switch-link a{ color: var(--flame); font-weight:700; text-decoration:none; }
+
+  .error-msg{
+    background: #ff3b5c1a; border:1px solid #ff3b5c44; color: var(--danger);
+    padding:10px 12px; border-radius:9px; font-size:12.5px; margin-bottom:14px; display:none;
+  }
+
+  /* ---------- Detail view ---------- */
+  .detail-header{
+    padding: 18px 16px 0; display:flex; align-items:center; gap:12px;
+  }
+  .back-btn{
+    width:36px;height:36px; border-radius:10px; background: var(--bg-card);
+    border:1px solid var(--line); display:flex; align-items:center; justify-content:center;
+    color: var(--text-hi); font-size:14px;
+  }
+  .room-box{
+    margin: 18px 16px; background: var(--bg-card); border:1px solid var(--line);
+    border-radius:14px; padding:16px;
+  }
+  .room-box .rb-title{ font-size:11px; color:var(--text-mid); text-transform:uppercase; font-weight:700; letter-spacing:0.04em; margin-bottom:10px; }
+  .room-row{ display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--line); }
+  .room-row:last-child{ border-bottom:none; }
+  .room-row .rl{ color: var(--text-mid); font-size:13px; }
+  .room-row .rv{ font-weight:700; font-size:15px; font-family:'Saira Condensed'; }
+  .locked-note{ color: var(--text-low); font-size:12.5px; display:flex; align-items:center; gap:8px; }
+
+  .lb-row{
+    display:flex; align-items:center; gap:12px; padding:11px 14px;
+    background: var(--bg-card); border:1px solid var(--line); border-radius:12px; margin-bottom:8px;
+  }
+  .lb-rank{
+    width:30px; height:30px; border-radius:8px; background: var(--bg-panel);
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; flex-shrink:0;
+  }
+  .lb-rank.top1{ background: linear-gradient(135deg,#ffc23c,#ff8a3c); color:#1a1200; }
+  .lb-rank.top2{ background:#c9ccd4; color:#1a1200; }
+  .lb-rank.top3{ background:#d98a52; color:#1a1200; }
+  .lb-info{ flex:1; }
+  .lb-name{ font-weight:700; font-size:14px; }
+  .lb-sub{ font-size:11px; color: var(--text-low); }
+  .lb-pts{ text-align:right; font-family:'Saira Condensed'; font-weight:800; font-size:16px; color: var(--cyan); }
+  .lb-pts span{ display:block; font-size:9.5px; color: var(--text-low); font-weight:600; text-transform:uppercase; }
+
+  .toast{
+    position: fixed; bottom: 90px; left:50%; transform: translateX(-50%);
+    background: var(--bg-card); border:1px solid var(--line); color: var(--text-hi);
+    padding: 12px 18px; border-radius: 12px; font-size:13px; font-weight:600;
+    box-shadow: 0 10px 30px -10px #000; z-index: 200; display:none;
+    max-width: 90%;
+  }
+  .toast.show{ display:flex; align-items:center; gap:8px; }
+  .toast i{ color: var(--success); }
+
+  .loader{
+    display:flex; justify-content:center; padding: 40px 0; color: var(--text-mid);
+  }
+  .loader i{ font-size: 22px; animation: spin 0.8s linear infinite; }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+
+  ::-webkit-scrollbar{ display:none; }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+<div class="toast" id="toast"><i class="fa-solid fa-circle-check"></i><span id="toast-msg"></span></div>
+
+<script>
+/* ============== CONFIG ============== */
+const API_BASE = "https://tournament1-app.onrender.com/api"; // <-- your Render backend
+
+/* ============== STATE ============== */
+let state = {
+  screen: 'login',       // login | signup | home | detail | profile | history
+  token: localStorage_get('token'),
+  user: localStorage_get('user'),
+  game: 'Free Fire',
+  tournaments: [],
+  activeTournament: null,
+  registrations: [],
+  myRegs: [],
+  loading: false,
+};
+
+// Simple in-memory storage fallback (artifacts can't use localStorage reliably across all hosts,
+// but since this becomes a real APK via WebView, localStorage works fine there)
+function localStorage_get(key){
+  try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }catch(e){ return null; }
+}
+function localStorage_set(key, val){
+  try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){}
+}
+function localStorage_clear(){
+  try{ localStorage.removeItem('token'); localStorage.removeItem('user'); }catch(e){}
+}
+
+/* ============== API HELPER ============== */
+async function api(path, method='GET', body=null, auth=true){
+  const headers = { 'Content-Type': 'application/json' };
+  if(auth && state.token) headers['Authorization'] = 'Bearer ' + state.token;
+  try{
+    const res = await fetch(API_BASE + path, {
+      method, headers, body: body ? JSON.stringify(body) : undefined
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.message || 'Something went wrong');
+    return data;
+  }catch(err){
+    throw err;
+  }
+}
+
+function showToast(msg, isError=false){
+  const t = document.getElementById('toast');
+  const m = document.getElementById('toast-msg');
+  m.textContent = msg;
+  t.querySelector('i').style.color = isError ? 'var(--danger)' : 'var(--success)';
+  t.querySelector('i').className = isError ? 'fa-solid fa-circle-exclamation' : 'fa-solid fa-circle-check';
+  t.classList.add('show');
+  setTimeout(()=> t.classList.remove('show'), 2400);
+}
+
+function fmtDate(d){
+  const dt = new Date(d);
+  return dt.toLocaleDateString('en-IN', {day:'numeric', month:'short'}) + ' · ' + dt.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
+}
+
+/* ============== RENDER ROOT ============== */
+function render(){
+  const app = document.getElementById('app');
+  if(!state.token){
+    app.innerHTML = state.screen === 'signup' ? renderSignup() : renderLogin();
+  } else {
+    let body = '';
+    if(state.screen === 'detail') body = renderDetail();
+    else if(state.screen === 'profile') body = renderProfile();
+    else if(state.screen === 'history') body = renderHistory();
+    else body = renderHome();
+    app.innerHTML = body;
+    if(state.screen !== 'detail') renderBottomNav();
+  }
+  attachEvents();
+}
+
+function renderBottomNav(){
+  const app = document.getElementById('app');
+  const nav = document.createElement('div');
+  nav.className = 'bottom-nav';
+  nav.innerHTML = `
+    <button class="nav-item ${state.screen==='home'?'active':''}" data-nav="home"><i class="fa-solid fa-trophy"></i>Arena</button>
+    <button class="nav-item ${state.screen==='history'?'active':''}" data-nav="history"><i class="fa-solid fa-clock-rotate-left"></i>History</button>
+    <button class="nav-item ${state.screen==='profile'?'active':''}" data-nav="profile"><i class="fa-solid fa-user"></i>Profile</button>
+  `;
+  app.appendChild(nav);
+}
+
+/* ============== LOGIN / SIGNUP ============== */
+function renderLogin(){
+  return `
+    <div class="auth-screen">
+      <div class="auth-logo">
+        <div class="brand-mark"><i class="fa-solid fa-skull"></i></div>
+        <h1>BattleZone <span style="color:var(--flame)">Arena</span></h1>
+        <p>Free Fire & PUBG Tournaments</p>
+      </div>
+      <div class="error-msg" id="err"></div>
+      <div class="field"><label>Phone Number</label><input type="tel" id="phone" placeholder="98XXXXXXXX"></div>
+      <div class="field"><label>Password</label><input type="password" id="password" placeholder="••••••••"></div>
+      <button class="primary-btn" id="loginBtn"><i class="fa-solid fa-bolt"></i> Login</button>
+      <div class="switch-link">New here? <a id="goSignup">Create Account</a></div>
+    </div>
+  `;
+}
+
+function renderSignup(){
+  return `
+    <div class="auth-screen">
+      <div class="auth-logo">
+        <div class="brand-mark"><i class="fa-solid fa-skull"></i></div>
+        <h1>Join the <span style="color:var(--flame)">Arena</span></h1>
+        <p>Create your warrior profile</p>
+      </div>
+      <div class="error-msg" id="err"></div>
+      <div class="field"><label>Full Name</label><input type="text" id="name" placeholder="Your name"></div>
+      <div class="field"><label>Phone Number</label><input type="tel" id="phone" placeholder="98XXXXXXXX"></div>
+      <div class="field"><label>In-Game Name</label><input type="text" id="gameId" placeholder="Your IGN"></div>
+      <div class="field"><label>In-Game UID</label><input type="text" id="gameUid" placeholder="Your UID"></div>
+      <div class="field"><label>Password</label><input type="password" id="password" placeholder="••••••••"></div>
+      <button class="primary-btn" id="signupBtn"><i class="fa-solid fa-user-plus"></i> Create Account</button>
+      <div class="switch-link">Already have an account? <a id="goLogin">Login</a></div>
+    </div>
+  `;
+}
+
+/* ============== HOME ============== */
+function renderHome(){
+  const filtered = state.tournaments.filter(t => t.game === state.game);
+  return `
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-mark"><i class="fa-solid fa-skull"></i></div>
+        <div class="brand-name">BATTLE<span>ZONE</span></div>
+      </div>
+      <div class="wallet-chip"><i class="fa-solid fa-coins"></i> ₨${state.user?.walletBalance || 0}</div>
+    </div>
+
+    <div class="game-tabs">
+      <button class="game-tab ${state.game==='Free Fire'?'active':''}" data-game="Free Fire">
+        <div class="gname">Free Fire</div>
+        <div class="gsub">Battle Royale</div>
+        <i class="fa-solid fa-fire gicon"></i>
+      </button>
+      <button class="game-tab pubg ${state.game==='PUBG'?'active':''}" data-game="PUBG">
+        <div class="gname">PUBG</div>
+        <div class="gsub">Mobile</div>
+        <i class="fa-solid fa-crosshairs gicon"></i>
+      </button>
+    </div>
+
+    <div class="section-label">
+      <h2><i class="fa-solid fa-bolt"></i> Live Tournaments</h2>
+      <span class="count">${filtered.length} matches</span>
+    </div>
+
+    <div class="t-list">
+      ${state.loading ? '<div class="loader"><i class="fa-solid fa-spinner"></i></div>' : ''}
+      ${!state.loading && filtered.length === 0 ? `
+        <div class="empty-state">
+          <i class="fa-solid fa-ghost"></i>
+          No tournaments yet for ${state.game}.<br>Check back soon, warrior.
+        </div>
+      ` : ''}
+      ${filtered.map(renderCard).join('')}
+    </div>
+  `;
+}
+
+function renderCard(t){
+  const isFull = t.filledSlots >= t.maxSlots;
+  const pct = Math.min(100, Math.round((t.filledSlots / t.maxSlots) * 100));
+  const isLive = t.status === 'Live';
+  const alreadyJoined = state.myRegs.some(r => r.tournament && (r.tournament._id === t._id));
+  return `
+    <div class="t-card ${isLive?'live':''}" data-id="${t._id}">
+      <div class="t-card-top">
+        <div>
+          <span class="t-tag ${isLive ? 'live' : (t.mode==='Free'?'free':'paid')}">
+            ${isLive ? '<i class="fa-solid fa-circle"></i> LIVE' : (t.mode === 'Free' ? 'FREE ENTRY' : 'PAID')}
+          </span>
+          <div class="t-title">${t.title}</div>
+          <div class="t-meta">
+            <span><i class="fa-solid fa-users"></i> ${t.matchType}</span>
+            <span><i class="fa-solid fa-calendar"></i> ${fmtDate(t.matchDate)}</span>
+          </div>
+        </div>
+        <div class="t-prize">
+          <div class="amt">₨${t.prizePool}</div>
+          <div class="lbl">Prize Pool</div>
+        </div>
+      </div>
+      <div class="t-card-bottom">
+        <div class="slot-bar"><div class="slot-fill" style="width:${pct}%"></div></div>
+        <div class="slot-text">${t.filledSlots}/${t.maxSlots}</div>
+        <button class="join-btn ${isFull && !alreadyJoined ? 'full' : ''} ${alreadyJoined ? 'joined' : ''}">
+          ${alreadyJoined ? 'Joined ✓' : (isFull ? 'Full' : (t.mode === 'Free' ? 'Join Free' : '₨'+t.entryFee))}
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+/* ============== DETAIL ============== */
+function renderDetail(){
+  const t = state.activeTournament;
+  if(!t) return '<div class="loader"><i class="fa-solid fa-spinner"></i></div>';
+  const isFull = t.filledSlots >= t.maxSlots;
+  const alreadyJoined = state.myRegs.some(r => r.tournament && (r.tournament._id === t._id));
+  const roomReleased = t.roomId && t.roomId.length > 0;
+
+  return `
+    <div class="detail-header">
+      <button class="back-btn" id="backBtn"><i class="fa-solid fa-arrow-left"></i></button>
+      <div style="font-family:'Saira Condensed'; font-weight:700; font-size:16px; text-transform:uppercase;">${t.title}</div>
+    </div>
+
+    <div style="padding: 16px;">
+      <div class="t-card" style="cursor:default;">
+        <div class="t-card-top">
+          <div>
+            <span class="t-tag ${t.status==='Live' ? 'live' : (t.mode==='Free'?'free':'paid')}">
+              ${t.status === 'Live' ? '<i class="fa-solid fa-circle"></i> LIVE' : (t.mode === 'Free' ? 'FREE ENTRY' : 'PAID ENTRY')}
+            </span>
+            <div class="t-meta" style="margin-top:10px;">
+              <span><i class="fa-solid fa-gamepad"></i> ${t.game}</span>
+              <span><i class="fa-solid fa-users"></i> ${t.matchType}</span>
+            </div>
+            <div class="t-meta" style="margin-top:6px;">
+              <span><i class="fa-solid fa-calendar"></i> ${fmtDate(t.matchDate)}</span>
+            </div>
+          </div>
+          <div class="t-prize">
+            <div class="amt">₨${t.prizePool}</div>
+            <div class="lbl">Prize Pool</div>
+          </div>
+        </div>
+        <div class="t-card-bottom">
+          <div class="slot-bar"><div class="slot-fill" style="width:${Math.min(100,Math.round((t.filledSlots/t.maxSlots)*100))}%"></div></div>
+          <div class="slot-text">${t.filledSlots}/${t.maxSlots} joined</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="room-box">
+      <div class="rb-title"><i class="fa-solid fa-lock"></i> Room Details</div>
+      ${alreadyJoined ? (
+        roomReleased ? `
+          <div class="room-row"><span class="rl">Room ID</span><span class="rv">${t.roomId}</span></div>
+          <div class="room-row"><span class="rl">Password</span><span class="rv">${t.roomPassword}</span></div>
+        ` : `<div class="locked-note"><i class="fa-solid fa-hourglass-half"></i> Room ID will be shared closer to match time.</div>`
+      ) : `<div class="locked-note"><i class="fa-solid fa-lock"></i> Join the tournament to unlock room details.</div>`}
+    </div>
+
+    <div style="padding: 0 16px 16px;">
+      <div class="section-label" style="padding-left:0;padding-right:0;">
+        <h2><i class="fa-solid fa-ranking-star"></i> Leaderboard</h2>
+        <span class="count">${state.registrations.length} players</span>
+      </div>
+      ${state.registrations.length === 0 ? `
+        <div class="empty-state" style="padding:30px 0;"><i class="fa-solid fa-chart-simple"></i>No results yet. Check back after the match.</div>
+      ` : state.registrations.map((r,i) => `
+        <div class="lb-row">
+          <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${r.rank || (i+1)}</div>
+          <div class="lb-info">
+            <div class="lb-name">${r.user?.name || 'Player'}</div>
+            <div class="lb-sub">${r.user?.gameId || ''} · ${r.kills || 0} kills</div>
+          </div>
+          <div class="lb-pts">${r.points || 0}<span>PTS</span></div>
+        </div>
+      `).join('')}
+    </div>
+
+    <div style="padding: 0 16px 24px; position:sticky; bottom:0;">
+      ${alreadyJoined ? `
+        <button class="ghost-btn" disabled style="opacity:0.6;"><i class="fa-solid fa-check"></i> Already Registered</button>
+      ` : isFull ? `
+        <button class="ghost-btn" disabled style="opacity:0.6;">Tournament Full</button>
+      ` : `
+        <button class="primary-btn" id="joinDetailBtn">
+          <i class="fa-solid fa-bolt"></i> ${t.mode === 'Free' ? 'Join Free Tournament' : 'Join · Pay ₨' + t.entryFee}
+        </button>
+      `}
+    </div>
+  `;
+}
+
+/* ============== PROFILE ============== */
+function renderProfile(){
+  const u = state.user;
+  return `
+    <div class="topbar"><div class="brand"><div class="brand-name">PROFILE</div></div></div>
+    <div style="padding: 0 16px;">
+      <div class="t-card" style="cursor:default; padding:20px; text-align:center;">
+        <div class="brand-mark" style="margin:0 auto 12px; width:60px;height:60px;font-size:24px;"><i class="fa-solid fa-user"></i></div>
+        <div style="font-family:'Saira Condensed'; font-weight:700; font-size:19px;">${u?.name || ''}</div>
+        <div style="color:var(--text-mid); font-size:13px; margin-top:2px;">${u?.phone || ''}</div>
+      </div>
+
+      <div class="room-box">
+        <div class="room-row"><span class="rl"><i class="fa-solid fa-coins" style="color:var(--gold)"></i> Wallet Balance</span><span class="rv">₨${u?.walletBalance || 0}</span></div>
+        <div class="room-row"><span class="rl"><i class="fa-solid fa-id-badge"></i> Role</span><span class="rv" style="text-transform:capitalize;">${u?.role || 'player'}</span></div>
+      </div>
+
+      <button class="ghost-btn" id="logoutBtn" style="color:var(--danger); border-color:#ff3b5c33;"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+    </div>
+  `;
+}
+
+/* ============== HISTORY ============== */
+function renderHistory(){
+  return `
+    <div class="topbar"><div class="brand"><div class="brand-name">MATCH HISTORY</div></div></div>
+    <div class="t-list">
+      ${state.loading ? '<div class="loader"><i class="fa-solid fa-spinner"></i></div>' : ''}
+      ${!state.loading && state.myRegs.length === 0 ? `
+        <div class="empty-state"><i class="fa-solid fa-box-open"></i>You haven't joined any tournaments yet.</div>
+      ` : ''}
+      ${state.myRegs.map(r => r.tournament ? `
+        <div class="t-card" style="cursor:default;">
+          <div class="t-card-top">
+            <div>
+              <span class="t-tag ${r.tournament.mode==='Free'?'free':'paid'}">${r.tournament.game}</span>
+              <div class="t-title">${r.tournament.title}</div>
+              <div class="t-meta"><span><i class="fa-solid fa-calendar"></i> ${fmtDate(r.tournament.matchDate)}</span></div>
+            </div>
+            <div class="t-prize">
+              <div class="amt" style="color:${r.prizeWon > 0 ? 'var(--success)' : 'var(--text-low)'}">₨${r.prizeWon || 0}</div>
+              <div class="lbl">${r.prizeWon > 0 ? r.prizeStatus : 'Prize'}</div>
+            </div>
+          </div>
+          <div class="t-card-bottom">
+            <div style="font-size:12px; color:var(--text-mid);">Rank #${r.rank || '-'} · ${r.kills || 0} kills · ${r.points || 0} pts</div>
+          </div>
+        </div>
+      ` : '').join('')}
+    </div>
+  `;
+}
+
+/* ============== DATA LOADERS ============== */
+async function loadTournaments(){
+  state.loading = true; render();
+  try{
+    state.tournaments = await api('/tournaments', 'GET', null, false);
+  }catch(e){ showToast(e.message, true); }
+  state.loading = false; render();
+}
+
+async function loadMyRegs(){
+  if(!state.token) return;
+  try{
+    state.myRegs = await api('/registrations/my');
+  }catch(e){ /* silent */ }
+}
+
+async function openTournament(id){
+  state.screen = 'detail';
+  state.activeTournament = state.tournaments.find(t => t._id === id) || null;
+  state.registrations = [];
+  render();
+  try{
+    state.activeTournament = await api('/tournaments/' + id, 'GET', null, false);
+    state.registrations = await api('/registrations/tournament/' + id, 'GET', null, false);
+  }catch(e){ showToast(e.message, true); }
+  render();
+}
+
+/* ============== EVENTS ============== */
+function attachEvents(){
+  const app = document.getElementById('app');
+
+  // Auth
+  const goSignup = document.getElementById('goSignup');
+  if(goSignup) goSignup.onclick = () => { state.screen = 'signup'; render(); };
+  const goLogin = document.getElementById('goLogin');
+  if(goLogin) goLogin.onclick = () => { state.screen = 'login'; render(); };
+
+  const loginBtn = document.getElementById('loginBtn');
+  if(loginBtn) loginBtn.onclick = async () => {
+    const phone = document.getElementById('phone').value.trim();
+    const password = document.getElementById('password').value;
+    const errBox = document.getElementById('err');
+    if(!phone || !password){ errBox.textContent = 'Please fill all fields'; errBox.style.display='block'; return; }
+    try{
+      const data = await api('/auth/login', 'POST', { phone, password }, false);
+      state.token = data.token; state.user = data.user;
+      localStorage_set('token', data.token); localStorage_set('user', data.user);
+      state.screen = 'home';
+      await loadTournaments(); await loadMyRegs();
+      render();
+    }catch(e){ errBox.textContent = e.message; errBox.style.display='block'; }
+  };
+
+  const signupBtn = document.getElementById('signupBtn');
+  if(signupBtn) signupBtn.onclick = async () => {
+    const name = document.getElementById('name').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const gameId = document.getElementById('gameId').value.trim();
+    const gameUid = document.getElementById('gameUid').value.trim();
+    const password = document.getElementById('password').value;
+    const errBox = document.getElementById('err');
+    if(!name || !phone || !password){ errBox.textContent = 'Name, phone & password are required'; errBox.style.display='block'; return; }
+    try{
+      const data = await api('/auth/register', 'POST', { name, phone, password, gameId, gameUid }, false);
+      state.token = data.token; state.user = data.user;
+      localStorage_set('token', data.token); localStorage_set('user', data.user);
+      state.screen = 'home';
+      await loadTournaments(); await loadMyRegs();
+      render();
+    }catch(e){ errBox.textContent = e.message; errBox.style.display='block'; }
+  };
+
+  // Game tabs
+  app.querySelectorAll('.game-tab').forEach(btn => {
+    btn.onclick = () => { state.game = btn.dataset.game; render(); };
+  });
+
+  // Tournament cards
+  app.querySelectorAll('.t-card[data-id]').forEach(card => {
+    card.onclick = () => openTournament(card.dataset.id);
+  });
+
+  // Detail back
+  const backBtn = document.getElementById('backBtn');
+  if(backBtn) backBtn.onclick = () => { state.screen = 'home'; render(); };
+
+  // Join from detail
+  const joinDetailBtn = document.getElementById('joinDetailBtn');
+  if(joinDetailBtn) joinDetailBtn.onclick = async () => {
+    const t = state.activeTournament;
+    try{
+      await api('/registrations/join/' + t._id, 'POST', { teamName: state.user.name });
+      showToast('Joined successfully! 🔥');
+      await loadMyRegs();
+      await openTournament(t._id);
+      await loadTournaments();
+    }catch(e){ showToast(e.message, true); }
+  };
+
+  // Bottom nav
+  app.querySelectorAll('.nav-item').forEach(btn => {
+    btn.onclick = async () => {
+      state.screen = btn.dataset.nav;
+      if(state.screen === 'home') await loadTournaments();
+      if(state.screen === 'history') await loadMyRegs();
+      render();
+    };
+  });
+
+  // Logout
+  const logoutBtn = document.getElementById('logoutBtn');
+  if(logoutBtn) logoutBtn.onclick = () => {
+    localStorage_clear();
+    state.token = null; state.user = null; state.screen = 'login';
+    render();
+  };
+}
+
+/* ============== INIT ============== */
+(async function init(){
+  if(state.token){
+    await loadTournaments();
+    await loadMyRegs();
+  }
+  render();
+})();
+</script>
+</body>
+</html>
