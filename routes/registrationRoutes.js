@@ -1,6 +1,7 @@
 const express = require('express');
 const Registration = require('../models/Registration');
 const Tournament = require('../models/Tournament');
+const User = require('../models/User');
 const { protect, adminOnly } = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -26,13 +27,23 @@ router.post('/join/:tournamentId', protect, async (req, res) => {
       return res.status(400).json({ message: 'Already registered for this tournament' });
     }
 
+    // If this is a paid tournament, deduct the entry fee from the player's wallet
+    if (tournament.mode === 'Paid' && tournament.entryFee > 0) {
+      const user = await User.findById(req.user.id);
+      if (user.walletBalance < tournament.entryFee) {
+        return res.status(400).json({ message: 'Insufficient wallet balance. Please deposit first.' });
+      }
+      user.walletBalance -= tournament.entryFee;
+      await user.save();
+    }
+
     const registration = await Registration.create({
       tournament: tournament._id,
       user: req.user.id,
       teamName,
-      paymentMethod: tournament.mode === 'Paid' ? paymentMethod : 'None',
+      paymentMethod: tournament.mode === 'Paid' ? 'eSewa' : 'None',
       transactionId: tournament.mode === 'Paid' ? transactionId : '',
-      paymentStatus: tournament.mode === 'Paid' ? 'Pending' : 'Not Required',
+      paymentStatus: tournament.mode === 'Paid' ? 'Verified' : 'Not Required',
     });
 
     tournament.filledSlots += 1;
@@ -78,12 +89,20 @@ router.get('/my', protect, async (req, res) => {
 router.put('/:id/result', protect, adminOnly, async (req, res) => {
   try {
     const { kills, rank, points, prizeWon, prizeStatus } = req.body;
+    const before = await Registration.findById(req.params.id);
+    if (!before) return res.status(404).json({ message: 'Registration not found' });
+
     const registration = await Registration.findByIdAndUpdate(
       req.params.id,
       { kills, rank, points, prizeWon, prizeStatus },
       { new: true }
     );
-    if (!registration) return res.status(404).json({ message: 'Registration not found' });
+
+    // If prize was just marked Paid for the first time, credit the user's wallet
+    if (prizeStatus === 'Paid' && before.prizeStatus !== 'Paid' && prizeWon > 0) {
+      await User.findByIdAndUpdate(registration.user, { $inc: { walletBalance: prizeWon } });
+    }
+
     res.json(registration);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
