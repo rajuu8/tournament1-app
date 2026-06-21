@@ -1,21 +1,15 @@
 {
-  "name": "tournament-app-backend",
+  "name": "battlezone-arena",
   "version": "1.0.0",
-  "description": "Free Fire / PUBG Tournament Hub Backend",
-  "main": "server.js",
+  "description": "BattleZone Arena Tournament App",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "build": "echo 'static site, no build needed'"
   },
   "dependencies": {
-    "bcryptjs": "^2.4.3",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.5.0"
+    "@capacitor/android": "^6.1.0",
+    "@capacitor/core": "^6.1.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "@capacitor/cli": "^6.1.0"
   }
 }
