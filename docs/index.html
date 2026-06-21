@@ -295,6 +295,27 @@
   .txn-status.pending{ color: var(--gold); }
   .txn-status.approved{ color: var(--success); }
   .txn-status.rejected{ color: var(--danger); }
+
+  /* ---------- Global Leaderboard ---------- */
+  .glb-podium{ display:flex; align-items:flex-end; gap:8px; padding: 8px 16px 20px; }
+  .glb-podium-card{ flex:1; background:var(--bg-card); border:1px solid var(--line); border-radius:14px; padding:14px 10px; text-align:center; position:relative; }
+  .glb-podium-card.rank1{ border-color: var(--gold); background: linear-gradient(180deg, #ffc23c1a, var(--bg-card)); order:2; padding-top:24px; }
+  .glb-podium-card.rank2{ border-color: #c9ccd4; order:1; }
+  .glb-podium-card.rank3{ border-color: #d98a52; order:3; }
+  .glb-crown{ position:absolute; top:-14px; left:50%; transform:translateX(-50%); font-size:20px; }
+  .glb-avatar{ width:46px; height:46px; border-radius:50%; background:var(--bg-panel); display:flex; align-items:center; justify-content:center; margin:0 auto 8px; font-size:18px; font-weight:800; border:2px solid var(--line); }
+  .rank1 .glb-avatar{ border-color: var(--gold); width:56px; height:56px; font-size:22px; }
+  .glb-podium-name{ font-weight:700; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .glb-podium-amt{ font-family:'Saira Condensed'; font-weight:800; font-size:16px; color:var(--gold); margin-top:4px; }
+
+  .glb-row{ display:flex; align-items:center; gap:12px; padding:12px 14px; background:var(--bg-card); border:1px solid var(--line); border-radius:12px; margin-bottom:8px; }
+  .glb-rank-num{ width:26px; text-align:center; font-weight:800; color:var(--text-mid); font-size:13px; flex-shrink:0; }
+  .glb-info{ flex:1; min-width:0; }
+  .glb-info .gname{ font-weight:700; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .glb-info .gsub{ font-size:11px; color:var(--text-low); }
+  .glb-earnings{ text-align:right; }
+  .glb-earnings .ge-amt{ font-family:'Saira Condensed'; font-weight:800; font-size:15px; color:var(--success); }
+  .glb-earnings .ge-lbl{ font-size:9.5px; color:var(--text-low); text-transform:uppercase; }
 </style>
 </head>
 <body>
@@ -317,6 +338,7 @@ let state = {
   registrations: [],
   myRegs: [],
   myTxns: [],
+  globalLeaderboard: [],
   esewaNumber: '',
   walletModal: null, // null | 'deposit' | 'withdraw'
   loading: false,
@@ -375,6 +397,7 @@ function render(){
     if(state.screen === 'detail') body = renderDetail();
     else if(state.screen === 'profile') body = renderProfile();
     else if(state.screen === 'history') body = renderHistory();
+    else if(state.screen === 'leaderboard') body = renderLeaderboard();
     else body = renderHome();
     app.innerHTML = body;
     if(state.screen !== 'detail') renderBottomNav();
@@ -393,6 +416,7 @@ function renderBottomNav(){
   nav.className = 'bottom-nav';
   nav.innerHTML = `
     <button class="nav-item ${state.screen==='home'?'active':''}" data-nav="home"><i class="fa-solid fa-trophy"></i>Arena</button>
+    <button class="nav-item ${state.screen==='leaderboard'?'active':''}" data-nav="leaderboard"><i class="fa-solid fa-ranking-star"></i>Ranks</button>
     <button class="nav-item ${state.screen==='history'?'active':''}" data-nav="history"><i class="fa-solid fa-clock-rotate-left"></i>History</button>
     <button class="nav-item ${state.screen==='profile'?'active':''}" data-nav="profile"><i class="fa-solid fa-user"></i>Profile</button>
   `;
@@ -729,7 +753,56 @@ function renderHistory(){
   `;
 }
 
-/* ============== DATA LOADERS ============== */
+/* ============== GLOBAL LEADERBOARD ============== */
+function initials(name){
+  if(!name) return '?';
+  return name.trim().split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase();
+}
+
+function renderLeaderboard(){
+  const top3 = state.globalLeaderboard.slice(0,3);
+  const rest = state.globalLeaderboard.slice(3);
+
+  return `
+    <div class="topbar"><div class="brand"><div class="brand-name">🏆 TOP EARNERS</div></div></div>
+
+    ${state.loading ? '<div class="loader"><i class="fa-solid fa-spinner"></i></div>' : ''}
+    ${!state.loading && state.globalLeaderboard.length === 0 ? `
+      <div class="empty-state"><i class="fa-solid fa-ranking-star"></i>No winners yet. Be the first champion!</div>
+    ` : ''}
+
+    ${top3.length > 0 ? `
+      <div class="glb-podium">
+        ${top3.map((p, i) => `
+          <div class="glb-podium-card rank${i+1}">
+            ${i===0 ? '<div class="glb-crown">👑</div>' : ''}
+            <div class="glb-avatar">${initials(p.name)}</div>
+            <div class="glb-podium-name">${p.name}</div>
+            <div class="glb-podium-amt">₨${p.totalEarnings}</div>
+          </div>
+        `).join('')}
+      </div>
+    ` : ''}
+
+    <div class="t-list" style="padding-top:0;">
+      ${rest.map((p, i) => `
+        <div class="glb-row">
+          <div class="glb-rank-num">#${i+4}</div>
+          <div class="glb-avatar" style="width:36px;height:36px;font-size:13px;">${initials(p.name)}</div>
+          <div class="glb-info">
+            <div class="gname">${p.name}</div>
+            <div class="gsub">${p.wins} win${p.wins!==1?'s':''} · ${p.tournamentsPlayed} matches</div>
+          </div>
+          <div class="glb-earnings">
+            <div class="ge-amt">₨${p.totalEarnings}</div>
+            <div class="ge-lbl">Earned</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
 async function loadTournaments(){
   state.loading = true; render();
   try{
@@ -766,6 +839,14 @@ async function loadEsewaNumber(){
     const data = await api('/transactions/settings/esewa', 'GET', null, false);
     state.esewaNumber = data.esewaNumber;
   }catch(e){ /* silent */ }
+}
+
+async function loadGlobalLeaderboard(){
+  state.loading = true; render();
+  try{
+    state.globalLeaderboard = await api('/registrations/leaderboard/global', 'GET', null, false);
+  }catch(e){ /* silent */ }
+  state.loading = false; render();
 }
 
 async function openTournament(id){
@@ -863,6 +944,7 @@ function attachEvents(){
       state.screen = btn.dataset.nav;
       if(state.screen === 'home'){ await refreshUser(); await loadTournaments(); }
       if(state.screen === 'history') await loadMyRegs();
+      if(state.screen === 'leaderboard') await loadGlobalLeaderboard();
       if(state.screen === 'profile'){ await refreshUser(); await loadMyTxns(); }
       render();
     };

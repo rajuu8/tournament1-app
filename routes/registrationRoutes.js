@@ -100,22 +100,33 @@ router.get('/my', protect, async (req, res) => {
 });
 
 // @route   PUT /api/registrations/:id/result
-// @desc    Admin updates kills/rank/points/prize for a registration
+// @desc    Admin updates kills/rank/points/prize for a registration. Prize auto-credits to wallet once.
 router.put('/:id/result', protect, adminOnly, async (req, res) => {
   try {
-    const { kills, rank, points, prizeWon, prizeStatus } = req.body;
+    const { kills, rank, points, prizeWon } = req.body;
     const before = await Registration.findById(req.params.id);
     if (!before) return res.status(404).json({ message: 'Registration not found' });
 
+    const newPrize = Number(prizeWon) || 0;
+    const alreadyPaid = before.prizeStatus === 'Paid';
+
     const registration = await Registration.findByIdAndUpdate(
       req.params.id,
-      { kills, rank, points, prizeWon, prizeStatus },
+      {
+        kills, rank, points,
+        prizeWon: newPrize,
+        prizeStatus: newPrize > 0 ? 'Paid' : 'Pending',
+      },
       { new: true }
     );
 
-    // If prize was just marked Paid for the first time, credit the user's wallet
-    if (prizeStatus === 'Paid' && before.prizeStatus !== 'Paid' && prizeWon > 0) {
-      await User.findByIdAndUpdate(registration.user, { $inc: { walletBalance: prizeWon } });
+    // Auto-credit wallet the first time a prize amount is set (avoids double-paying on edits)
+    if (!alreadyPaid && newPrize > 0) {
+      await User.findByIdAndUpdate(registration.user, { $inc: { walletBalance: newPrize } });
+    } else if (alreadyPaid && newPrize !== before.prizeWon) {
+      // Admin corrected the amount after it was already paid - adjust the difference
+      const diff = newPrize - before.prizeWon;
+      await User.findByIdAndUpdate(registration.user, { $inc: { walletBalance: diff } });
     }
 
     res.json(registration);
@@ -136,6 +147,47 @@ router.put('/:id/payment', protect, adminOnly, async (req, res) => {
     );
     if (!registration) return res.status(404).json({ message: 'Registration not found' });
     res.json(registration);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// @route   GET /api/registrations/leaderboard/global
+// @desc    Public - lifetime earnings leaderboard across all tournaments
+router.get('/leaderboard/global', async (req, res) => {
+  try {
+    const leaderboard = await Registration.aggregate([
+      { $match: { prizeWon: { $gt: 0 } } },
+      {
+        $group: {
+          _id: '$user',
+          totalEarnings: { $sum: '$prizeWon' },
+          wins: { $sum: { $cond: [{ $eq: ['$rank', 1] }, 1, 0] } },
+          tournamentsPlayed: { $sum: 1 },
+        },
+      },
+      { $sort: { totalEarnings: -1 } },
+      { $limit: 50 },
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'user',
+        },
+      },
+      { $unwind: '$user' },
+      {
+        $project: {
+          name: '$user.name',
+          gameId: '$user.gameId',
+          totalEarnings: 1,
+          wins: 1,
+          tournamentsPlayed: 1,
+        },
+      },
+    ]);
+    res.json(leaderboard);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
