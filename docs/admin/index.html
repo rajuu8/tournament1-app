@@ -173,6 +173,9 @@ let state = {
   modal: null, // 'createTournament' | 'editRoom' | 'viewRegs' | 'editResult'
   activeTournament: null,
   registrations: [],
+  transactions: [],
+  txnLoading: false,
+  esewaNumber: '',
 };
 
 function ls_get(k){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
@@ -216,7 +219,12 @@ function render(){
     app.innerHTML = `
       <div class="layout">
         ${renderSidebar()}
-        <div class="main">${state.page === 'registrations' ? renderRegistrationsPage() : renderTournamentsPage()}</div>
+        <div class="main">${
+        state.page === 'registrations' ? renderRegistrationsPage() :
+        state.page === 'transactions' ? renderTransactionsPage() :
+        state.page === 'settings' ? renderSettingsPage() :
+        renderTournamentsPage()
+      }</div>
       </div>
       ${renderModal()}
     `;
@@ -263,6 +271,8 @@ function renderSidebar(){
       </div>
       <button class="nav-link ${state.page==='tournaments'?'active':''}" data-page="tournaments"><i class="fa-solid fa-trophy"></i> <span class="mobile-hide">Tournaments</span></button>
       <button class="nav-link ${state.page==='registrations'?'active':''}" data-page="registrations"><i class="fa-solid fa-users"></i> <span class="mobile-hide">Players</span></button>
+      <button class="nav-link ${state.page==='transactions'?'active':''}" data-page="transactions"><i class="fa-solid fa-money-bill-transfer"></i> <span class="mobile-hide">Wallet Requests</span></button>
+      <button class="nav-link ${state.page==='settings'?'active':''}" data-page="settings"><i class="fa-solid fa-gear"></i> <span class="mobile-hide">Settings</span></button>
       <div class="sidebar-bottom">
         <button class="nav-link logout-link" id="logoutBtn"><i class="fa-solid fa-right-from-bracket"></i> <span class="mobile-hide">Logout</span></button>
       </div>
@@ -347,6 +357,85 @@ function renderRegistrationsPage(){
           `).join('')}
         </tbody>
       </table>
+    </div>
+  `;
+}
+
+function renderTransactionsPage(){
+  const pending = state.transactions.filter(t => t.status === 'Pending');
+  const deposits = pending.filter(t => t.type === 'Deposit');
+  const withdrawals = pending.filter(t => t.type === 'Withdrawal');
+
+  return `
+    <div class="topbar">
+      <div>
+        <div class="page-title">Wallet Requests</div>
+        <div class="page-sub">Verify deposits and process withdrawal requests</div>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="si" style="background:#3ddc8422;color:var(--success)"><i class="fa-solid fa-arrow-down"></i></div><div class="sv">${deposits.length}</div><div class="sl">Pending Deposits</div></div>
+      <div class="stat-card"><div class="si" style="background:#ffc23c22;color:var(--gold)"><i class="fa-solid fa-arrow-up"></i></div><div class="sv">${withdrawals.length}</div><div class="sl">Pending Withdrawals</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3><i class="fa-solid fa-money-bill-transfer"></i> All Requests</h3>
+        <select id="txnFilter" style="background:var(--bg-panel); border:1px solid var(--line); color:var(--text-hi); padding:7px 10px; border-radius:8px; font-size:12.5px;">
+          <option value="">All</option>
+          <option value="Pending" selected>Pending</option>
+          <option value="Approved">Approved</option>
+          <option value="Rejected">Rejected</option>
+        </select>
+      </div>
+      <table>
+        <thead><tr><th>Player</th><th>Type</th><th>Amount</th><th>Details</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          ${state.txnLoading ? '<tr><td colspan="6"><div class="loader"><i class="fa-solid fa-spinner"></i></div></td></tr>' : ''}
+          ${!state.txnLoading && state.transactions.length === 0 ? '<tr class="empty-row"><td colspan="6">No transactions found.</td></tr>' : ''}
+          ${state.transactions.map(t => `
+            <tr>
+              <td>
+                <div style="font-weight:700;">${t.user?.name || '-'}</div>
+                <div style="font-size:11px; color:var(--text-low);">${t.user?.phone || ''}</div>
+              </td>
+              <td><span class="badge ${t.type==='Deposit'?'free':'paid'}">${t.type}</span></td>
+              <td style="font-weight:700;">₨${t.amount}</td>
+              <td style="font-size:12px; color:var(--text-mid);">
+                ${t.type === 'Deposit' ? `From: ${t.senderEsewaNumber || '-'}<br>Txn ID: ${t.transactionId || '-'}` : `To: ${t.receiverEsewaNumber || '-'}`}
+              </td>
+              <td><span class="badge ${t.status.toLowerCase()}">${t.status}</span></td>
+              <td>
+                ${t.status === 'Pending' ? `
+                  <div style="display:flex; gap:6px;">
+                    <button class="btn btn-success btn-sm" data-txnaction="approve" data-txnid="${t._id}"><i class="fa-solid fa-check"></i></button>
+                    <button class="btn btn-danger btn-sm" data-txnaction="reject" data-txnid="${t._id}"><i class="fa-solid fa-xmark"></i></button>
+                  </div>
+                ` : `<span style="font-size:11px; color:var(--text-low);">${t.adminNote || '-'}</span>`}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderSettingsPage(){
+  return `
+    <div class="topbar">
+      <div>
+        <div class="page-title">Settings</div>
+        <div class="page-sub">Configure your eSewa number for player deposits</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3><i class="fa-solid fa-mobile-screen"></i> eSewa Number</h3></div>
+      <div style="padding:18px;">
+        <div class="success-msg" id="settingsOk"></div>
+        <div class="field"><label>Your eSewa Number (shown to players for deposits)</label><input type="tel" id="esewaInput" value="${state.esewaNumber || ''}" placeholder="98XXXXXXXX"></div>
+        <button class="btn btn-primary" id="saveEsewaBtn"><i class="fa-solid fa-check"></i> Save</button>
+      </div>
     </div>
   `;
 }
@@ -469,6 +558,22 @@ async function loadRegistrations(tournamentId){
   catch(e){ showToast(e.message, true); }
 }
 
+async function loadTransactions(statusFilter){
+  state.txnLoading = true; render();
+  try{
+    const q = statusFilter ? `?status=${statusFilter}` : '';
+    state.transactions = await api('/transactions' + q);
+  }catch(e){ showToast(e.message, true); }
+  state.txnLoading = false; render();
+}
+
+async function loadEsewaSetting(){
+  try{
+    const data = await api('/transactions/settings/esewa', 'GET', null, false);
+    state.esewaNumber = data.esewaNumber;
+  }catch(e){ /* silent */ }
+}
+
 /* ============ EVENTS ============ */
 function attachEvents(){
   const app = document.getElementById('app');
@@ -508,7 +613,12 @@ function attachEvents(){
 
   // Sidebar nav
   app.querySelectorAll('[data-page]').forEach(btn => {
-    btn.onclick = () => { state.page = btn.dataset.page; render(); };
+    btn.onclick = async () => {
+      state.page = btn.dataset.page;
+      if(state.page === 'transactions') await loadTransactions('Pending');
+      if(state.page === 'settings') await loadEsewaSetting();
+      render();
+    };
   });
 
   const logoutBtn = document.getElementById('logoutBtn');
@@ -615,6 +725,36 @@ function attachEvents(){
       }catch(e){ showToast(e.message, true); }
     };
   });
+
+  // Transaction filter dropdown
+  const txnFilter = document.getElementById('txnFilter');
+  if(txnFilter) txnFilter.onchange = async () => { await loadTransactions(txnFilter.value); };
+
+  // Transaction approve/reject
+  app.querySelectorAll('[data-txnaction]').forEach(btn => {
+    btn.onclick = async () => {
+      const action = btn.dataset.txnaction; // approve | reject
+      if(action === 'reject' && !confirm('Reject this transaction?')) return;
+      try{
+        await api('/transactions/' + btn.dataset.txnid + '/' + action, 'PUT', {});
+        showToast('Transaction ' + (action === 'approve' ? 'approved! ✅' : 'rejected'));
+        const currentFilter = document.getElementById('txnFilter')?.value || 'Pending';
+        await loadTransactions(currentFilter);
+      }catch(e){ showToast(e.message, true); }
+    };
+  });
+
+  // Settings - save eSewa number
+  const saveEsewaBtn = document.getElementById('saveEsewaBtn');
+  if(saveEsewaBtn) saveEsewaBtn.onclick = async () => {
+    const esewaNumber = document.getElementById('esewaInput').value.trim();
+    try{
+      await api('/transactions/settings/esewa', 'PUT', { esewaNumber });
+      showToast('eSewa number updated! ✅');
+      const ok = document.getElementById('settingsOk');
+      if(ok){ ok.textContent = 'Saved successfully'; ok.style.display='block'; }
+    }catch(e){ showToast(e.message, true); }
+  };
 }
 
 /* ============ INIT ============ */
