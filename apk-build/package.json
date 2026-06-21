@@ -1,0 +1,15 @@
+{
+  "name": "battlezone-arena",
+  "version": "1.0.0",
+  "description": "BattleZone Arena Tournament App",
+  "scripts": {
+    "build": "echo 'static site, no build needed'"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.0",
+    "@capacitor/core": "^6.1.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.0"
+  }
+}
