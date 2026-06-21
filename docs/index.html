@@ -742,6 +742,15 @@ async function loadMyTxns(){
   }catch(e){ /* silent */ }
 }
 
+async function refreshUser(){
+  if(!state.token) return;
+  try{
+    const data = await api('/auth/me');
+    state.user = data.user;
+    localStorage_set('user', data.user);
+  }catch(e){ /* silent */ }
+}
+
 async function loadEsewaNumber(){
   try{
     const data = await api('/transactions/settings/esewa', 'GET', null, false);
@@ -827,6 +836,7 @@ function attachEvents(){
     try{
       await api('/registrations/join/' + t._id, 'POST', { teamName: state.user.name });
       showToast('Joined successfully! 🔥');
+      await refreshUser();
       await loadMyRegs();
       await openTournament(t._id);
       await loadTournaments();
@@ -837,9 +847,9 @@ function attachEvents(){
   app.querySelectorAll('.nav-item').forEach(btn => {
     btn.onclick = async () => {
       state.screen = btn.dataset.nav;
-      if(state.screen === 'home') await loadTournaments();
+      if(state.screen === 'home'){ await refreshUser(); await loadTournaments(); }
       if(state.screen === 'history') await loadMyRegs();
-      if(state.screen === 'profile') await loadMyTxns();
+      if(state.screen === 'profile'){ await refreshUser(); await loadMyTxns(); }
       render();
     };
   });
@@ -892,9 +902,7 @@ function attachEvents(){
       await api('/transactions/withdraw', 'POST', { amount, receiverEsewaNumber });
       showToast('Withdrawal request submitted!');
       state.walletModal = null;
-      // Reflect the deduction locally right away (backend already deducted it)
-      state.user.walletBalance = (state.user.walletBalance || 0) - amount;
-      localStorage_set('user', state.user);
+      await refreshUser();
       await loadMyTxns();
       render();
     }catch(e){ err.textContent = e.message; err.style.display='block'; }
@@ -904,6 +912,7 @@ function attachEvents(){
 /* ============== INIT ============== */
 (async function init(){
   if(state.token){
+    await refreshUser();
     await loadTournaments();
     await loadMyRegs();
     await loadMyTxns();
