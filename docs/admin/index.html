@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BattleZone Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Saira+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root{
+    --bg-void: #0a0b0f;
+    --bg-panel: #14161d;
+    --bg-card: #1b1e28;
+    --line: #2a2e3a;
+    --flame: #ff4d2e;
+    --flame-dim: #ff4d2e33;
+    --cyan: #2ee6d6;
+    --cyan-dim: #2ee6d633;
+    --gold: #ffc23c;
+    --text-hi: #f4f5f7;
+    --text-mid: #9aa0ad;
+    --text-low: #5b6170;
+    --danger: #ff3b5c;
+    --success: #3ddc84;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    background: var(--bg-void);
+    background-image: radial-gradient(circle at 10% 0%, #ff4d2e10, transparent 40%);
+    color: var(--text-hi);
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh;
+  }
+  h1,h2,h3{ font-family: 'Saira Condensed', sans-serif; text-transform: uppercase; letter-spacing: 0.02em; }
+
+  /* Layout */
+  .layout{ display:flex; min-height:100vh; }
+  .sidebar{
+    width: 220px; background: var(--bg-panel); border-right:1px solid var(--line);
+    padding: 22px 14px; display:flex; flex-direction:column; flex-shrink:0;
+  }
+  .sb-brand{ display:flex; align-items:center; gap:10px; padding: 0 8px 26px; }
+  .sb-mark{ width:34px;height:34px; border-radius:9px; background: linear-gradient(135deg,var(--flame),#ff8a3c); display:flex; align-items:center; justify-content:center; font-size:14px; }
+  .sb-name{ font-family:'Saira Condensed'; font-weight:800; font-size:16px; text-transform:uppercase; }
+  .sb-name span{ color:var(--flame); }
+  .sb-name small{ display:block; font-size:9.5px; color:var(--text-low); letter-spacing:0.05em; font-weight:600; }
+
+  .nav-link{
+    display:flex; align-items:center; gap:11px; padding:11px 12px; border-radius:9px;
+    color: var(--text-mid); font-weight:700; font-size:13.5px; cursor:pointer; margin-bottom:3px;
+    border:none; background:none; width:100%; text-align:left;
+  }
+  .nav-link i{ width:16px; font-size:14px; }
+  .nav-link:hover{ background: var(--bg-card); color: var(--text-hi); }
+  .nav-link.active{ background: var(--flame-dim); color: var(--flame); }
+
+  .sidebar-bottom{ margin-top:auto; }
+  .logout-link{ color: var(--danger); }
+
+  .main{ flex:1; padding: 26px 30px; overflow-x:hidden; }
+  .topbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
+  .page-title{ font-size:22px; }
+  .page-sub{ color:var(--text-mid); font-size:13px; margin-top:2px; }
+
+  .btn{
+    border:none; border-radius:10px; padding:11px 18px; font-family:'Rajdhani'; font-weight:700;
+    font-size:13.5px; cursor:pointer; display:inline-flex; align-items:center; gap:8px;
+  }
+  .btn-primary{ background: linear-gradient(135deg,var(--flame),#ff7a3c); color:#fff; box-shadow:0 8px 20px -10px var(--flame-dim); }
+  .btn-secondary{ background: var(--bg-card); color: var(--text-hi); border:1px solid var(--line); }
+  .btn-success{ background: var(--success); color:#06140c; }
+  .btn-danger{ background: transparent; color: var(--danger); border:1px solid #ff3b5c44; }
+  .btn-sm{ padding:7px 12px; font-size:12px; }
+  .btn:disabled{ opacity:0.5; cursor:not-allowed; }
+
+  /* Stat cards */
+  .stat-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px; }
+  .stat-card{ background: var(--bg-card); border:1px solid var(--line); border-radius:14px; padding:18px; }
+  .stat-card .si{ width:34px;height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; margin-bottom:10px; font-size:14px; }
+  .stat-card .sv{ font-family:'Saira Condensed'; font-weight:800; font-size:24px; }
+  .stat-card .sl{ font-size:11.5px; color:var(--text-mid); font-weight:600; }
+
+  /* Table */
+  .panel{ background: var(--bg-card); border:1px solid var(--line); border-radius:14px; overflow:hidden; margin-bottom:20px; }
+  .panel-head{ padding:16px 18px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+  .panel-head h3{ font-size:15px; }
+  table{ width:100%; border-collapse:collapse; }
+  th{ text-align:left; padding:11px 16px; font-size:11px; color:var(--text-low); text-transform:uppercase; letter-spacing:0.04em; border-bottom:1px solid var(--line); font-weight:700; }
+  td{ padding:13px 16px; border-bottom:1px solid var(--line); font-size:13.5px; }
+  tr:last-child td{ border-bottom:none; }
+  tr:hover td{ background:#ffffff04; }
+
+  .badge{ display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; text-transform:uppercase; }
+  .badge.free{ background: var(--cyan-dim); color: var(--cyan); }
+  .badge.paid{ background:#ffc23c22; color:var(--gold); }
+  .badge.upcoming{ background:#9aa0ad22; color:var(--text-mid); }
+  .badge.live{ background:#3ddc8422; color:var(--success); }
+  .badge.completed{ background:#2ee6d622; color:var(--cyan); }
+  .badge.cancelled{ background:#ff3b5c22; color:var(--danger); }
+  .badge.pending{ background:#ffc23c22; color:var(--gold); }
+  .badge.verified{ background:#3ddc8422; color:var(--success); }
+  .badge.rejected{ background:#ff3b5c22; color:var(--danger); }
+
+  /* Modal */
+  .modal-overlay{ position:fixed; inset:0; background:#000000c0; display:none; align-items:center; justify-content:center; z-index:200; padding:20px; }
+  .modal-overlay.show{ display:flex; }
+  .modal{ background: var(--bg-panel); border:1px solid var(--line); border-radius:16px; width:100%; max-width:520px; max-height:88vh; overflow-y:auto; }
+  .modal-head{ padding:18px 22px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; background:var(--bg-panel); }
+  .modal-head h3{ font-size:17px; }
+  .modal-close{ background:none; border:none; color:var(--text-mid); font-size:18px; cursor:pointer; }
+  .modal-body{ padding:20px 22px; }
+
+  .field{ margin-bottom:14px; }
+  .field label{ font-size:11.5px; color:var(--text-mid); font-weight:700; text-transform:uppercase; letter-spacing:0.03em; display:block; margin-bottom:6px; }
+  .field input, .field select, .field textarea{
+    width:100%; background: var(--bg-card); border:1px solid var(--line); border-radius:9px;
+    padding:11px 13px; color: var(--text-hi); font-family:'Rajdhani'; font-size:14px; font-weight:600;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{ outline:none; border-color:var(--flame); }
+  .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+  .auth-screen{ max-width:380px; margin:80px auto; padding:0 20px; }
+  .auth-logo{ text-align:center; margin-bottom:30px; }
+  .auth-logo .sb-mark{ width:56px;height:56px; margin:0 auto 14px; font-size:22px; border-radius:14px; }
+  .auth-tabs{ display:flex; gap:8px; margin-bottom:22px; background:var(--bg-card); padding:4px; border-radius:10px; }
+  .auth-tab{ flex:1; padding:9px; border-radius:8px; border:none; background:none; color:var(--text-mid); font-weight:700; font-size:12.5px; cursor:pointer; text-transform:uppercase; }
+  .auth-tab.active{ background: var(--flame); color:#fff; }
+
+  .error-msg{ background:#ff3b5c1a; border:1px solid #ff3b5c44; color:var(--danger); padding:10px 12px; border-radius:9px; font-size:12.5px; margin-bottom:14px; display:none; }
+  .success-msg{ background:#3ddc841a; border:1px solid #3ddc8444; color:var(--success); padding:10px 12px; border-radius:9px; font-size:12.5px; margin-bottom:14px; display:none; }
+
+  .empty-row td{ text-align:center; color:var(--text-low); padding:40px 0; }
+  .loader{ display:flex; justify-content:center; padding:40px 0; color:var(--text-mid); }
+  .loader i{ font-size:20px; animation:spin .8s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  .toast{ position:fixed; bottom:24px; right:24px; background:var(--bg-card); border:1px solid var(--line); padding:13px 18px; border-radius:11px; font-size:13px; font-weight:600; display:none; align-items:center; gap:9px; z-index:300; box-shadow:0 10px 30px -10px #000; }
+  .toast.show{ display:flex; }
+
+  .num-input-row{ display:flex; gap:6px; align-items:center; }
+  .num-input-row input{ width:60px; padding:6px 8px; font-size:13px; }
+
+  .mobile-hide{ display:block; }
+  @media (max-width: 900px){
+    .stat-grid{ grid-template-columns:repeat(2,1fr); }
+    .layout{ flex-direction:column; }
+    .sidebar{ width:100%; flex-direction:row; align-items:center; padding:12px 16px; overflow-x:auto; }
+    .sb-brand{ padding:0 10px; flex-shrink:0; }
+    .sidebar-bottom{ margin-top:0; margin-left:auto; display:flex; }
+    .nav-link{ flex-shrink:0; width:auto; white-space:nowrap; }
+    .mobile-hide{ display:none; }
+    .main{ padding:18px; }
+    table{ font-size:12px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+<div class="toast" id="toast"><i class="fa-solid fa-circle-check" id="toast-icon" style="color:var(--success)"></i><span id="toast-msg"></span></div>
+
+<script>
+const API_BASE = "https://tournament1-app.onrender.com/api";
+
+let state = {
+  token: ls_get('admin_token'),
+  user: ls_get('admin_user'),
+  authMode: 'login', // login | register
+  page: 'tournaments', // tournaments | registrations | createAdmin
+  tournaments: [],
+  loading: false,
+  modal: null, // 'createTournament' | 'editRoom' | 'viewRegs' | 'editResult'
+  activeTournament: null,
+  registrations: [],
+};
+
+function ls_get(k){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
+function ls_set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+function ls_clear(){ localStorage.removeItem('admin_token'); localStorage.removeItem('admin_user'); }
+
+async function api(path, method='GET', body=null, auth=true){
+  const headers = {'Content-Type':'application/json'};
+  if(auth && state.token) headers['Authorization'] = 'Bearer ' + state.token;
+  const res = await fetch(API_BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  const data = await res.json();
+  if(!res.ok) throw new Error(data.message || 'Something went wrong');
+  return data;
+}
+
+function showToast(msg, isError=false){
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  const icon = document.getElementById('toast-icon');
+  icon.className = isError ? 'fa-solid fa-circle-exclamation' : 'fa-solid fa-circle-check';
+  icon.style.color = isError ? 'var(--danger)' : 'var(--success)';
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2600);
+}
+
+function fmtDate(d){
+  const dt = new Date(d);
+  return dt.toLocaleDateString('en-IN',{day:'numeric',month:'short'}) + ' · ' + dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+}
+function fmtDateInput(d){
+  const dt = d ? new Date(d) : new Date();
+  return dt.toISOString().slice(0,16);
+}
+
+/* ============ RENDER ============ */
+function render(){
+  const app = document.getElementById('app');
+  if(!state.token){
+    app.innerHTML = renderAuth();
+  } else {
+    app.innerHTML = `
+      <div class="layout">
+        ${renderSidebar()}
+        <div class="main">${state.page === 'registrations' ? renderRegistrationsPage() : renderTournamentsPage()}</div>
+      </div>
+      ${renderModal()}
+    `;
+  }
+  attachEvents();
+}
+
+function renderAuth(){
+  return `
+    <div class="auth-screen">
+      <div class="auth-logo">
+        <div class="sb-mark"><i class="fa-solid fa-shield-halved"></i></div>
+        <h1>BattleZone Admin</h1>
+        <p style="color:var(--text-mid); font-size:13px; margin-top:4px;">Tournament Control Center</p>
+      </div>
+      <div class="auth-tabs">
+        <button class="auth-tab ${state.authMode==='login'?'active':''}" data-mode="login">Login</button>
+        <button class="auth-tab ${state.authMode==='register'?'active':''}" data-mode="register">First-Time Setup</button>
+      </div>
+      <div class="error-msg" id="err"></div>
+      <div class="success-msg" id="ok"></div>
+      ${state.authMode === 'login' ? `
+        <div class="field"><label>Phone Number</label><input type="tel" id="phone" placeholder="98XXXXXXXX"></div>
+        <div class="field"><label>Password</label><input type="password" id="password" placeholder="••••••••"></div>
+        <button class="btn btn-primary" id="loginBtn" style="width:100%; justify-content:center;"><i class="fa-solid fa-right-to-bracket"></i> Login</button>
+      ` : `
+        <div class="field"><label>Your Name</label><input type="text" id="name" placeholder="Admin name"></div>
+        <div class="field"><label>Phone Number</label><input type="tel" id="phone" placeholder="98XXXXXXXX"></div>
+        <div class="field"><label>Password</label><input type="password" id="password" placeholder="••••••••"></div>
+        <div class="field"><label>Admin Secret Key</label><input type="password" id="secretKey" placeholder="From your .env ADMIN_SECRET_KEY"></div>
+        <button class="btn btn-primary" id="registerBtn" style="width:100%; justify-content:center;"><i class="fa-solid fa-user-shield"></i> Create Admin Account</button>
+        <p style="font-size:11.5px; color:var(--text-low); margin-top:12px; text-align:center;">Only use this once to create your admin account. The secret key is in your Render environment variables.</p>
+      `}
+    </div>
+  `;
+}
+
+function renderSidebar(){
+  return `
+    <div class="sidebar">
+      <div class="sb-brand">
+        <div class="sb-mark"><i class="fa-solid fa-shield-halved"></i></div>
+        <div class="sb-name">BATTLE<span>ZONE</span><small>ADMIN PANEL</small></div>
+      </div>
+      <button class="nav-link ${state.page==='tournaments'?'active':''}" data-page="tournaments"><i class="fa-solid fa-trophy"></i> <span class="mobile-hide">Tournaments</span></button>
+      <button class="nav-link ${state.page==='registrations'?'active':''}" data-page="registrations"><i class="fa-solid fa-users"></i> <span class="mobile-hide">Players</span></button>
+      <div class="sidebar-bottom">
+        <button class="nav-link logout-link" id="logoutBtn"><i class="fa-solid fa-right-from-bracket"></i> <span class="mobile-hide">Logout</span></button>
+      </div>
+    </div>
+  `;
+}
+
+function renderTournamentsPage(){
+  const total = state.tournaments.length;
+  const live = state.tournaments.filter(t=>t.status==='Live').length;
+  const upcoming = state.tournaments.filter(t=>t.status==='Upcoming').length;
+  const totalSlots = state.tournaments.reduce((s,t)=>s+t.filledSlots,0);
+
+  return `
+    <div class="topbar">
+      <div>
+        <div class="page-title">Tournaments</div>
+        <div class="page-sub">Create and manage Free Fire & PUBG tournaments</div>
+      </div>
+      <button class="btn btn-primary" id="newTournamentBtn"><i class="fa-solid fa-plus"></i> New Tournament</button>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="si" style="background:var(--flame-dim);color:var(--flame)"><i class="fa-solid fa-trophy"></i></div><div class="sv">${total}</div><div class="sl">Total Tournaments</div></div>
+      <div class="stat-card"><div class="si" style="background:#3ddc8422;color:var(--success)"><i class="fa-solid fa-circle"></i></div><div class="sv">${live}</div><div class="sl">Live Now</div></div>
+      <div class="stat-card"><div class="si" style="background:var(--cyan-dim);color:var(--cyan)"><i class="fa-solid fa-clock"></i></div><div class="sv">${upcoming}</div><div class="sl">Upcoming</div></div>
+      <div class="stat-card"><div class="si" style="background:#ffc23c22;color:var(--gold)"><i class="fa-solid fa-users"></i></div><div class="sv">${totalSlots}</div><div class="sl">Total Registrations</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3><i class="fa-solid fa-list"></i> All Tournaments</h3></div>
+      <table>
+        <thead><tr><th>Title</th><th>Game</th><th>Mode</th><th>Slots</th><th>Prize</th><th>Match Date</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          ${state.loading ? '<tr><td colspan="8"><div class="loader"><i class="fa-solid fa-spinner"></i></div></td></tr>' : ''}
+          ${!state.loading && state.tournaments.length===0 ? '<tr class="empty-row"><td colspan="8">No tournaments yet. Click "New Tournament" to create your first one.</td></tr>' : ''}
+          ${state.tournaments.map(t => `
+            <tr>
+              <td style="font-weight:700;">${t.title}</td>
+              <td>${t.game}</td>
+              <td><span class="badge ${t.mode==='Free'?'free':'paid'}">${t.mode}</span></td>
+              <td>${t.filledSlots}/${t.maxSlots}</td>
+              <td style="color:var(--gold); font-weight:700;">₨${t.prizePool}</td>
+              <td style="font-size:12.5px; color:var(--text-mid);">${fmtDate(t.matchDate)}</td>
+              <td><span class="badge ${t.status.toLowerCase()}">${t.status}</span></td>
+              <td>
+                <div style="display:flex; gap:6px;">
+                  <button class="btn btn-secondary btn-sm" data-action="room" data-id="${t._id}"><i class="fa-solid fa-key"></i></button>
+                  <button class="btn btn-secondary btn-sm" data-action="players" data-id="${t._id}"><i class="fa-solid fa-users"></i></button>
+                  <button class="btn btn-danger btn-sm" data-action="delete" data-id="${t._id}"><i class="fa-solid fa-trash"></i></button>
+                </div>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderRegistrationsPage(){
+  return `
+    <div class="topbar">
+      <div>
+        <div class="page-title">All Players</div>
+        <div class="page-sub">Select a tournament to view its registered players</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3><i class="fa-solid fa-trophy"></i> Select Tournament</h3></div>
+      <table>
+        <thead><tr><th>Title</th><th>Game</th><th>Registrations</th><th>Action</th></tr></thead>
+        <tbody>
+          ${state.tournaments.length===0 ? '<tr class="empty-row"><td colspan="4">No tournaments yet.</td></tr>' : ''}
+          ${state.tournaments.map(t => `
+            <tr>
+              <td style="font-weight:700;">${t.title}</td>
+              <td>${t.game}</td>
+              <td>${t.filledSlots}/${t.maxSlots}</td>
+              <td><button class="btn btn-secondary btn-sm" data-action="players" data-id="${t._id}"><i class="fa-solid fa-eye"></i> View</button></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderModal(){
+  if(!state.modal) return '';
+
+  if(state.modal === 'createTournament'){
+    return `
+      <div class="modal-overlay show">
+        <div class="modal">
+          <div class="modal-head"><h3><i class="fa-solid fa-trophy"></i> New Tournament</h3><button class="modal-close" id="closeModal">✕</button></div>
+          <div class="modal-body">
+            <div class="error-msg" id="err"></div>
+            <div class="field"><label>Title</label><input type="text" id="title" placeholder="e.g. Friday Night Squad Showdown"></div>
+            <div class="field-row">
+              <div class="field"><label>Game</label><select id="game"><option>Free Fire</option><option>PUBG</option></select></div>
+              <div class="field"><label>Match Type</label><select id="matchType"><option>Solo</option><option>Duo</option><option selected>Squad</option></select></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Mode</label><select id="mode"><option>Free</option><option>Paid</option></select></div>
+              <div class="field"><label>Entry Fee (₨)</label><input type="number" id="entryFee" value="0" min="0"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Prize Pool (₨)</label><input type="number" id="prizePool" value="0" min="0"></div>
+              <div class="field"><label>Max Slots</label><input type="number" id="maxSlots" value="48" min="1"></div>
+            </div>
+            <div class="field"><label>Match Date & Time</label><input type="datetime-local" id="matchDate" value="${fmtDateInput()}"></div>
+            <div class="field"><label>Description (optional)</label><textarea id="description" rows="2" placeholder="Rules, notes, etc."></textarea></div>
+            <button class="btn btn-primary" id="saveTournamentBtn" style="width:100%; justify-content:center; margin-top:6px;"><i class="fa-solid fa-check"></i> Create Tournament</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  if(state.modal === 'room'){
+    const t = state.activeTournament;
+    return `
+      <div class="modal-overlay show">
+        <div class="modal">
+          <div class="modal-head"><h3><i class="fa-solid fa-key"></i> Room Details & Status</h3><button class="modal-close" id="closeModal">✕</button></div>
+          <div class="modal-body">
+            <div class="error-msg" id="err"></div>
+            <div class="field"><label>Status</label>
+              <select id="status">
+                <option ${t.status==='Upcoming'?'selected':''}>Upcoming</option>
+                <option ${t.status==='Live'?'selected':''}>Live</option>
+                <option ${t.status==='Completed'?'selected':''}>Completed</option>
+                <option ${t.status==='Cancelled'?'selected':''}>Cancelled</option>
+              </select>
+            </div>
+            <div class="field"><label>Room ID</label><input type="text" id="roomId" value="${t.roomId||''}" placeholder="Release when ready"></div>
+            <div class="field"><label>Room Password</label><input type="text" id="roomPassword" value="${t.roomPassword||''}" placeholder="Release when ready"></div>
+            <p style="font-size:11.5px; color:var(--text-low); margin-bottom:14px;">Players only see Room ID/Password after joining. Leave blank to keep it locked.</p>
+            <button class="btn btn-primary" id="saveRoomBtn" style="width:100%; justify-content:center;"><i class="fa-solid fa-check"></i> Save Changes</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  if(state.modal === 'players'){
+    const t = state.activeTournament;
+    return `
+      <div class="modal-overlay show">
+        <div class="modal" style="max-width:760px;">
+          <div class="modal-head"><h3><i class="fa-solid fa-users"></i> ${t ? t.title : ''} — Players</h3><button class="modal-close" id="closeModal">✕</button></div>
+          <div class="modal-body">
+            ${state.registrations.length === 0 ? '<p style="color:var(--text-low); text-align:center; padding:30px 0;">No players registered yet.</p>' : `
+            <table>
+              <thead><tr><th>Player</th><th>Payment</th><th>Kills</th><th>Rank</th><th>Points</th><th>Prize</th><th></th></tr></thead>
+              <tbody>
+                ${state.registrations.map(r => `
+                  <tr data-reg-id="${r._id}">
+                    <td>
+                      <div style="font-weight:700;">${r.user?.name||'-'}</div>
+                      <div style="font-size:11px; color:var(--text-low);">${r.user?.gameId||''} ${r.user?.gameUid ? '· UID '+r.user.gameUid : ''}</div>
+                    </td>
+                    <td>
+                      ${r.paymentStatus === 'Not Required' ? '<span class="badge free">Free</span>' : `
+                        <span class="badge ${r.paymentStatus.toLowerCase()}">${r.paymentStatus}</span>
+                        ${r.paymentStatus === 'Pending' ? `
+                          <div style="margin-top:5px; display:flex; gap:4px;">
+                            <button class="btn btn-success btn-sm" data-payaction="Verified" data-regid="${r._id}">✓</button>
+                            <button class="btn btn-danger btn-sm" data-payaction="Rejected" data-regid="${r._id}">✕</button>
+                          </div>
+                        ` : ''}
+                      `}
+                    </td>
+                    <td><input type="number" class="result-input" data-field="kills" data-regid="${r._id}" value="${r.kills||0}" style="width:55px; background:var(--bg-card); border:1px solid var(--line); border-radius:6px; color:var(--text-hi); padding:5px 7px; font-size:12.5px;"></td>
+                    <td><input type="number" class="result-input" data-field="rank" data-regid="${r._id}" value="${r.rank||0}" style="width:55px; background:var(--bg-card); border:1px solid var(--line); border-radius:6px; color:var(--text-hi); padding:5px 7px; font-size:12.5px;"></td>
+                    <td><input type="number" class="result-input" data-field="points" data-regid="${r._id}" value="${r.points||0}" style="width:55px; background:var(--bg-card); border:1px solid var(--line); border-radius:6px; color:var(--text-hi); padding:5px 7px; font-size:12.5px;"></td>
+                    <td><input type="number" class="result-input" data-field="prizeWon" data-regid="${r._id}" value="${r.prizeWon||0}" style="width:65px; background:var(--bg-card); border:1px solid var(--line); border-radius:6px; color:var(--text-hi); padding:5px 7px; font-size:12.5px;"></td>
+                    <td><button class="btn btn-primary btn-sm" data-action="saveResult" data-regid="${r._id}"><i class="fa-solid fa-save"></i></button></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            `}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  return '';
+}
+
+/* ============ DATA LOADERS ============ */
+async function loadTournaments(){
+  state.loading = true; render();
+  try{ state.tournaments = await api('/tournaments', 'GET', null, false); }
+  catch(e){ showToast(e.message, true); }
+  state.loading = false; render();
+}
+
+async function loadRegistrations(tournamentId){
+  try{ state.registrations = await api('/registrations/tournament/' + tournamentId, 'GET', null, false); }
+  catch(e){ showToast(e.message, true); }
+}
+
+/* ============ EVENTS ============ */
+function attachEvents(){
+  const app = document.getElementById('app');
+
+  // Auth tabs
+  app.querySelectorAll('.auth-tab').forEach(btn => {
+    btn.onclick = () => { state.authMode = btn.dataset.mode; render(); };
+  });
+
+  const loginBtn = document.getElementById('loginBtn');
+  if(loginBtn) loginBtn.onclick = async () => {
+    const phone = document.getElementById('phone').value.trim();
+    const password = document.getElementById('password').value;
+    const err = document.getElementById('err');
+    try{
+      const data = await api('/auth/admin/login', 'POST', { phone, password }, false);
+      state.token = data.token; state.user = data.user;
+      ls_set('admin_token', data.token); ls_set('admin_user', data.user);
+      await loadTournaments();
+    }catch(e){ err.textContent = e.message; err.style.display='block'; }
+  };
+
+  const registerBtn = document.getElementById('registerBtn');
+  if(registerBtn) registerBtn.onclick = async () => {
+    const name = document.getElementById('name').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const password = document.getElementById('password').value;
+    const secretKey = document.getElementById('secretKey').value;
+    const err = document.getElementById('err');
+    try{
+      const data = await api('/auth/admin/register', 'POST', { name, phone, password, secretKey }, false);
+      state.token = data.token; state.user = data.user;
+      ls_set('admin_token', data.token); ls_set('admin_user', data.user);
+      await loadTournaments();
+    }catch(e){ err.textContent = e.message; err.style.display='block'; }
+  };
+
+  // Sidebar nav
+  app.querySelectorAll('[data-page]').forEach(btn => {
+    btn.onclick = () => { state.page = btn.dataset.page; render(); };
+  });
+
+  const logoutBtn = document.getElementById('logoutBtn');
+  if(logoutBtn) logoutBtn.onclick = () => { ls_clear(); state.token=null; state.user=null; render(); };
+
+  // New tournament
+  const newBtn = document.getElementById('newTournamentBtn');
+  if(newBtn) newBtn.onclick = () => { state.modal = 'createTournament'; render(); };
+
+  const closeModal = document.getElementById('closeModal');
+  if(closeModal) closeModal.onclick = () => { state.modal = null; state.activeTournament = null; render(); };
+
+  const saveTournamentBtn = document.getElementById('saveTournamentBtn');
+  if(saveTournamentBtn) saveTournamentBtn.onclick = async () => {
+    const err = document.getElementById('err');
+    const payload = {
+      title: document.getElementById('title').value.trim(),
+      game: document.getElementById('game').value,
+      matchType: document.getElementById('matchType').value,
+      mode: document.getElementById('mode').value,
+      entryFee: Number(document.getElementById('entryFee').value),
+      prizePool: Number(document.getElementById('prizePool').value),
+      maxSlots: Number(document.getElementById('maxSlots').value),
+      matchDate: document.getElementById('matchDate').value,
+      description: document.getElementById('description').value,
+    };
+    if(!payload.title){ err.textContent='Title is required'; err.style.display='block'; return; }
+    try{
+      await api('/tournaments', 'POST', payload);
+      showToast('Tournament created! 🏆');
+      state.modal = null;
+      await loadTournaments();
+    }catch(e){ err.textContent = e.message; err.style.display='block'; }
+  };
+
+  // Table row actions
+  app.querySelectorAll('[data-action="room"]').forEach(btn => {
+    btn.onclick = () => {
+      state.activeTournament = state.tournaments.find(t => t._id === btn.dataset.id);
+      state.modal = 'room'; render();
+    };
+  });
+
+  app.querySelectorAll('[data-action="players"]').forEach(btn => {
+    btn.onclick = async () => {
+      state.activeTournament = state.tournaments.find(t => t._id === btn.dataset.id);
+      await loadRegistrations(btn.dataset.id);
+      state.modal = 'players'; render();
+    };
+  });
+
+  app.querySelectorAll('[data-action="delete"]').forEach(btn => {
+    btn.onclick = async () => {
+      if(!confirm('Delete this tournament? This cannot be undone.')) return;
+      try{
+        await api('/tournaments/' + btn.dataset.id, 'DELETE');
+        showToast('Tournament deleted');
+        await loadTournaments();
+      }catch(e){ showToast(e.message, true); }
+    };
+  });
+
+  const saveRoomBtn = document.getElementById('saveRoomBtn');
+  if(saveRoomBtn) saveRoomBtn.onclick = async () => {
+    const t = state.activeTournament;
+    const payload = {
+      status: document.getElementById('status').value,
+      roomId: document.getElementById('roomId').value,
+      roomPassword: document.getElementById('roomPassword').value,
+    };
+    try{
+      await api('/tournaments/' + t._id, 'PUT', payload);
+      showToast('Room details updated! 🔑');
+      state.modal = null;
+      await loadTournaments();
+    }catch(e){ showToast(e.message, true); }
+  };
+
+  // Payment verify/reject
+  app.querySelectorAll('[data-payaction]').forEach(btn => {
+    btn.onclick = async () => {
+      try{
+        await api('/registrations/' + btn.dataset.regid + '/payment', 'PUT', { paymentStatus: btn.dataset.payaction });
+        showToast('Payment ' + btn.dataset.payaction.toLowerCase());
+        await loadRegistrations(state.activeTournament._id);
+        render();
+      }catch(e){ showToast(e.message, true); }
+    };
+  });
+
+  // Save result row
+  app.querySelectorAll('[data-action="saveResult"]').forEach(btn => {
+    btn.onclick = async () => {
+      const regId = btn.dataset.regid;
+      const row = document.querySelector(`tr[data-reg-id="${regId}"]`);
+      const kills = Number(row.querySelector('[data-field="kills"]').value);
+      const rank = Number(row.querySelector('[data-field="rank"]').value);
+      const points = Number(row.querySelector('[data-field="points"]').value);
+      const prizeWon = Number(row.querySelector('[data-field="prizeWon"]').value);
+      try{
+        await api('/registrations/' + regId + '/result', 'PUT', { kills, rank, points, prizeWon, prizeStatus: prizeWon > 0 ? 'Pending' : 'Pending' });
+        showToast('Result saved! 📊');
+        await loadRegistrations(state.activeTournament._id);
+      }catch(e){ showToast(e.message, true); }
+    };
+  });
+}
+
+/* ============ INIT ============ */
+(async function init(){
+  if(state.token) await loadTournaments();
+  render();
+})();
+</script>
+</body>
+</html>
