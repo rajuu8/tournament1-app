@@ -431,6 +431,7 @@ function renderSignup(){
       <div class="field"><label>In-Game Name</label><input type="text" id="gameId" placeholder="Your IGN"></div>
       <div class="field"><label>In-Game UID</label><input type="text" id="gameUid" placeholder="Your UID"></div>
       <div class="field"><label>Password</label><input type="password" id="password" placeholder="••••••••"></div>
+      <div class="field"><label>Referral Code <span style="color:var(--text-low); text-transform:none; font-weight:600;">(optional)</span></label><input type="text" id="referralCode" placeholder="Friend's code, if any" style="text-transform:uppercase;"></div>
       <button class="primary-btn" id="signupBtn"><i class="fa-solid fa-user-plus"></i> Create Account</button>
       <div class="switch-link">Already have an account? <a id="goLogin">Login</a></div>
     </div>
@@ -620,6 +621,15 @@ function renderProfile(){
         <button class="ghost-btn" id="withdrawBtn" style="margin-top:0;"><i class="fa-solid fa-arrow-up"></i> Withdraw</button>
       </div>
 
+      <div class="room-box" style="background: linear-gradient(135deg, #ff4d2e22, #2ee6d622); border-color: var(--flame);">
+        <div class="rb-title"><i class="fa-solid fa-gift"></i> Invite Friends, Earn ₨10</div>
+        <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
+          <div style="flex:1; background:var(--bg-panel); border:1px solid var(--line); border-radius:9px; padding:10px 12px; font-family:'Saira Condensed'; font-weight:800; font-size:17px; letter-spacing:0.05em; text-align:center;">${u?.referralCode || '—'}</div>
+          <button class="join-btn" id="copyReferralBtn" style="padding:10px 14px;"><i class="fa-solid fa-copy"></i></button>
+        </div>
+        <p style="font-size:11.5px; color:var(--text-low); margin-top:8px;">Share your code. When your friend joins their first tournament, you both get ₨10! ${u?.referralCount ? `<br><span style="color:var(--success); font-weight:700;">${u.referralCount} friend${u.referralCount>1?'s':''} joined so far 🎉</span>` : ''}</p>
+      </div>
+
       <div class="section-label" style="padding-left:0; padding-right:0;">
         <h2><i class="fa-solid fa-receipt"></i> Transactions</h2>
       </div>
@@ -793,6 +803,9 @@ function attachEvents(){
       state.screen = 'home';
       await loadTournaments(); await loadMyRegs();
       render();
+      if(data.dailyBonus){
+        setTimeout(()=> showToast(`🎁 Daily login bonus: +₨${data.dailyBonus.amount} (Day ${data.dailyBonus.streak} streak)`), 400);
+      }
     }catch(e){ errBox.textContent = e.message; errBox.style.display='block'; }
   };
 
@@ -803,10 +816,11 @@ function attachEvents(){
     const gameId = document.getElementById('gameId').value.trim();
     const gameUid = document.getElementById('gameUid').value.trim();
     const password = document.getElementById('password').value;
+    const referralCode = document.getElementById('referralCode').value.trim();
     const errBox = document.getElementById('err');
     if(!name || !phone || !password){ errBox.textContent = 'Name, phone & password are required'; errBox.style.display='block'; return; }
     try{
-      const data = await api('/auth/register', 'POST', { name, phone, password, gameId, gameUid }, false);
+      const data = await api('/auth/register', 'POST', { name, phone, password, gameId, gameUid, referralCode }, false);
       state.token = data.token; state.user = data.user;
       localStorage_set('token', data.token); localStorage_set('user', data.user);
       state.screen = 'home';
@@ -860,6 +874,19 @@ function attachEvents(){
     localStorage_clear();
     state.token = null; state.user = null; state.screen = 'login';
     render();
+  };
+
+  // Copy referral code
+  const copyReferralBtn = document.getElementById('copyReferralBtn');
+  if(copyReferralBtn) copyReferralBtn.onclick = () => {
+    const code = state.user?.referralCode || '';
+    if(!code) return;
+    const text = `Join BattleZone Arena using my referral code ${code} and let's win together! 🔥`;
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(()=> showToast('Referral message copied!'));
+    } else {
+      showToast('Your code: ' + code);
+    }
   };
 
   // Wallet: open modals

@@ -12,11 +12,28 @@ const generateToken = (user) => {
   });
 };
 
+// Generates a short unique referral code based on the user's name + random digits
+async function generateReferralCode(name) {
+  const base = (name || 'PLAYER').replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 5) || 'PLYR';
+  let code, exists = true;
+  while (exists) {
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    code = `${base}${rand}`;
+    exists = await User.findOne({ referralCode: code });
+  }
+  return code;
+}
+
+// Returns today's date as YYYY-MM-DD (used for daily login streak tracking)
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 // @route   POST /api/auth/register
 // @desc    Register a new player
 router.post('/register', async (req, res) => {
   try {
-    const { name, phone, email, password, gameId, gameUid } = req.body;
+    const { name, phone, email, password, gameId, gameUid, referralCode } = req.body;
 
     if (!name || !phone || !password) {
       return res.status(400).json({ message: 'Name, phone and password are required' });
@@ -27,7 +44,15 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'Phone number already registered' });
     }
 
+    // If a referral code was entered, find the referring user
+    let referredBy = null;
+    if (referralCode && referralCode.trim()) {
+      const referrer = await User.findOne({ referralCode: referralCode.trim().toUpperCase() });
+      if (referrer) referredBy = referrer._id;
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
+    const myReferralCode = await generateReferralCode(name);
 
     const user = await User.create({
       name,
@@ -37,6 +62,10 @@ router.post('/register', async (req, res) => {
       gameId,
       gameUid,
       role: 'player',
+      referralCode: myReferralCode,
+      referredBy,
+      lastLoginDate: todayStr(),
+      loginStreak: 1,
     });
 
     res.status(201).json({
@@ -46,6 +75,8 @@ router.post('/register', async (req, res) => {
         name: user.name,
         phone: user.phone,
         role: user.role,
+        walletBalance: user.walletBalance,
+        referralCode: user.referralCode,
       },
     });
   } catch (err) {
@@ -69,6 +100,25 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Invalid phone or password' });
     }
 
+    // Update daily login streak (only once per calendar day)
+    const today = todayStr();
+    let dailyBonusAwarded = false;
+    let newStreak = user.loginStreak || 0;
+
+    if (user.lastLoginDate !== today) {
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      newStreak = user.lastLoginDate === yesterday ? (user.loginStreak || 0) + 1 : 1;
+
+      // Daily bonus: small wallet credit, capped so it stays cheap. Bigger for longer streaks, capped at day 7.
+      const bonusAmount = Math.min(newStreak, 7) * 1; // ₨1 per streak day, max ₨7
+      user.walletBalance += bonusAmount;
+      user.lastLoginDate = today;
+      user.loginStreak = newStreak;
+      await user.save();
+      dailyBonusAwarded = true;
+      req._dailyBonusAmount = bonusAmount;
+    }
+
     res.json({
       token: generateToken(user),
       user: {
@@ -77,7 +127,10 @@ router.post('/login', async (req, res) => {
         phone: user.phone,
         role: user.role,
         walletBalance: user.walletBalance,
+        referralCode: user.referralCode,
+        loginStreak: user.loginStreak,
       },
+      dailyBonus: dailyBonusAwarded ? { amount: req._dailyBonusAmount, streak: newStreak } : null,
     });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });

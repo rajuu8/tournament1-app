@@ -49,6 +49,21 @@ router.post('/join/:tournamentId', protect, async (req, res) => {
     tournament.filledSlots += 1;
     await tournament.save();
 
+    // Referral bonus: if this user was referred and this is their FIRST tournament ever, reward both sides
+    const user = await User.findById(req.user.id);
+    if (user.referredBy && !user.referralBonusCredited) {
+      const totalJoins = await Registration.countDocuments({ user: req.user.id });
+      if (totalJoins === 1) { // this join we just created is their first
+        const REFERRAL_BONUS = 10; // ₨10 each side
+        user.walletBalance += REFERRAL_BONUS;
+        user.referralBonusCredited = true;
+        await user.save();
+        await User.findByIdAndUpdate(user.referredBy, {
+          $inc: { walletBalance: REFERRAL_BONUS, referralCount: 1 },
+        });
+      }
+    }
+
     res.status(201).json(registration);
   } catch (err) {
     if (err.code === 11000) {

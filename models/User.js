@@ -10,6 +10,14 @@ const userSchema = new mongoose.Schema(
     gameUid: { type: String, trim: true }, // in-game UID number
     role: { type: String, enum: ['player', 'admin'], default: 'player' },
     walletBalance: { type: Number, default: 0 }, // for prize payouts
+
+    referralCode: { type: String, unique: true, sparse: true }, // this user's own code to share
+    referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }, // who referred this user
+    referralBonusCredited: { type: Boolean, default: false }, // becomes true after referred user joins first tournament
+    referralCount: { type: Number, default: 0 }, // how many successful referrals this user has
+
+    lastLoginDate: { type: String, default: '' }, // 'YYYY-MM-DD' for daily login streak
+    loginStreak: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
