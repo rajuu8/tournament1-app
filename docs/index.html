@@ -262,6 +262,39 @@
   @keyframes spin{ to{ transform: rotate(360deg); } }
 
   ::-webkit-scrollbar{ display:none; }
+
+  /* ---------- Wallet & Modal ---------- */
+  .modal-overlay{ position:fixed; inset:0; background:#000000c0; display:none; align-items:flex-end; justify-content:center; z-index:300; }
+  .modal-overlay.show{ display:flex; }
+  .modal-sheet{
+    background: var(--bg-panel); border:1px solid var(--line); border-radius: 20px 20px 0 0;
+    width:100%; max-width:480px; max-height:88vh; overflow-y:auto; padding-bottom: 24px;
+  }
+  .modal-head{ padding:18px 18px 6px; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; background:var(--bg-panel); }
+  .modal-head h3{ font-size:17px; }
+  .modal-close{ background: var(--bg-card); border:none; color:var(--text-mid); width:30px;height:30px; border-radius:9px; font-size:14px; }
+  .modal-body{ padding: 10px 18px 4px; }
+
+  .wallet-tabs{ display:flex; gap:8px; padding:0 18px 14px; }
+  .wallet-tab{ flex:1; padding:10px; border-radius:10px; border:1px solid var(--line); background:var(--bg-card); color:var(--text-mid); font-weight:700; font-size:13px; text-align:center; }
+  .wallet-tab.active{ border-color: var(--flame); color: var(--flame); background: var(--flame-dim); }
+
+  .esewa-box{ background:var(--bg-card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:16px; text-align:center; }
+  .esewa-box .el{ font-size:11px; color:var(--text-mid); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:6px; }
+  .esewa-box .ev{ font-family:'Saira Condensed'; font-weight:800; font-size:22px; color: var(--success); }
+
+  .txn-row{ display:flex; align-items:center; gap:12px; padding:13px 14px; background:var(--bg-card); border:1px solid var(--line); border-radius:12px; margin-bottom:8px; }
+  .txn-icon{ width:36px;height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .txn-icon.dep{ background:#3ddc8422; color:var(--success); }
+  .txn-icon.wd{ background:#ffc23c22; color:var(--gold); }
+  .txn-info{ flex:1; }
+  .txn-type{ font-weight:700; font-size:13.5px; }
+  .txn-date{ font-size:11px; color:var(--text-low); }
+  .txn-amt{ text-align:right; font-family:'Saira Condensed'; font-weight:800; font-size:15px; }
+  .txn-status{ font-size:10px; text-transform:uppercase; font-weight:700; }
+  .txn-status.pending{ color: var(--gold); }
+  .txn-status.approved{ color: var(--success); }
+  .txn-status.rejected{ color: var(--danger); }
 </style>
 </head>
 <body>
@@ -283,6 +316,9 @@ let state = {
   activeTournament: null,
   registrations: [],
   myRegs: [],
+  myTxns: [],
+  esewaNumber: '',
+  walletModal: null, // null | 'deposit' | 'withdraw'
   loading: false,
 };
 
@@ -342,6 +378,11 @@ function render(){
     else body = renderHome();
     app.innerHTML = body;
     if(state.screen !== 'detail') renderBottomNav();
+    if(state.walletModal){
+      const modalDiv = document.createElement('div');
+      modalDiv.innerHTML = renderWalletModal();
+      app.appendChild(modalDiv.firstElementChild);
+    }
   }
   attachEvents();
 }
@@ -574,7 +615,75 @@ function renderProfile(){
         <div class="room-row"><span class="rl"><i class="fa-solid fa-id-badge"></i> Role</span><span class="rv" style="text-transform:capitalize;">${u?.role || 'player'}</span></div>
       </div>
 
+      <div style="display:flex; gap:10px; margin: 14px 0;">
+        <button class="primary-btn" id="depositBtn" style="margin-top:0;"><i class="fa-solid fa-plus"></i> Add Money</button>
+        <button class="ghost-btn" id="withdrawBtn" style="margin-top:0;"><i class="fa-solid fa-arrow-up"></i> Withdraw</button>
+      </div>
+
+      <div class="section-label" style="padding-left:0; padding-right:0;">
+        <h2><i class="fa-solid fa-receipt"></i> Transactions</h2>
+      </div>
+      <div id="txnList">
+        ${state.myTxns.length === 0 ? `<div class="empty-state" style="padding:30px 0;"><i class="fa-solid fa-receipt"></i>No transactions yet.</div>` : state.myTxns.map(renderTxnRow).join('')}
+      </div>
+
       <button class="ghost-btn" id="logoutBtn" style="color:var(--danger); border-color:#ff3b5c33;"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+    </div>
+  `;
+}
+
+function renderTxnRow(t){
+  const isDeposit = t.type === 'Deposit';
+  return `
+    <div class="txn-row">
+      <div class="txn-icon ${isDeposit?'dep':'wd'}"><i class="fa-solid ${isDeposit?'fa-arrow-down':'fa-arrow-up'}"></i></div>
+      <div class="txn-info">
+        <div class="txn-type">${t.type}</div>
+        <div class="txn-date">${fmtDate(t.createdAt)}</div>
+      </div>
+      <div>
+        <div class="txn-amt" style="color:${isDeposit?'var(--success)':'var(--gold)'}">${isDeposit?'+':'-'}₨${t.amount}</div>
+        <div class="txn-status ${t.status.toLowerCase()}" style="text-align:right;">${t.status}</div>
+      </div>
+    </div>
+  `;
+}
+
+/* ============== WALLET MODAL ============== */
+function renderWalletModal(){
+  if(!state.walletModal) return '';
+  const mode = state.walletModal; // 'deposit' | 'withdraw'
+  return `
+    <div class="modal-overlay show" id="walletOverlay">
+      <div class="modal-sheet">
+        <div class="modal-head">
+          <h3>${mode === 'deposit' ? '💰 Add Money' : '💸 Withdraw'}</h3>
+          <button class="modal-close" id="closeWalletModal">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="error-msg" id="walletErr"></div>
+          ${mode === 'deposit' ? `
+            <div class="esewa-box">
+              <div class="el">Send Payment To This eSewa Number</div>
+              <div class="ev">${state.esewaNumber || 'Not set yet'}</div>
+            </div>
+            <div class="field"><label>Amount Sent (₨)</label><input type="number" id="depAmount" placeholder="500"></div>
+            <div class="field"><label>Your eSewa Number</label><input type="tel" id="depSenderNumber" placeholder="98XXXXXXXX"></div>
+            <div class="field"><label>Transaction ID</label><input type="text" id="depTxnId" placeholder="From your eSewa app"></div>
+            <button class="primary-btn" id="submitDepositBtn"><i class="fa-solid fa-check"></i> Submit for Verification</button>
+            <p style="font-size:11.5px; color:var(--text-low); margin-top:10px; text-align:center;">Your wallet will be credited once admin verifies the payment.</p>
+          ` : `
+            <div class="room-box" style="margin:0 0 16px;">
+              <div class="rb-title">Available Balance</div>
+              <div style="font-family:'Saira Condensed'; font-size:24px; font-weight:800; color:var(--success);">₨${state.user?.walletBalance || 0}</div>
+            </div>
+            <div class="field"><label>Amount to Withdraw (₨)</label><input type="number" id="wdAmount" placeholder="500"></div>
+            <div class="field"><label>Your eSewa Number (to receive money)</label><input type="tel" id="wdReceiverNumber" placeholder="98XXXXXXXX"></div>
+            <button class="primary-btn" id="submitWithdrawBtn"><i class="fa-solid fa-check"></i> Request Withdrawal</button>
+            <p style="font-size:11.5px; color:var(--text-low); margin-top:10px; text-align:center;">Amount will be deducted now and sent to your eSewa within 24 hours.</p>
+          `}
+        </div>
+      </div>
     </div>
   `;
 }
@@ -623,6 +732,20 @@ async function loadMyRegs(){
   if(!state.token) return;
   try{
     state.myRegs = await api('/registrations/my');
+  }catch(e){ /* silent */ }
+}
+
+async function loadMyTxns(){
+  if(!state.token) return;
+  try{
+    state.myTxns = await api('/transactions/my');
+  }catch(e){ /* silent */ }
+}
+
+async function loadEsewaNumber(){
+  try{
+    const data = await api('/transactions/settings/esewa', 'GET', null, false);
+    state.esewaNumber = data.esewaNumber;
   }catch(e){ /* silent */ }
 }
 
@@ -716,6 +839,7 @@ function attachEvents(){
       state.screen = btn.dataset.nav;
       if(state.screen === 'home') await loadTournaments();
       if(state.screen === 'history') await loadMyRegs();
+      if(state.screen === 'profile') await loadMyTxns();
       render();
     };
   });
@@ -727,6 +851,54 @@ function attachEvents(){
     state.token = null; state.user = null; state.screen = 'login';
     render();
   };
+
+  // Wallet: open modals
+  const depositBtn = document.getElementById('depositBtn');
+  if(depositBtn) depositBtn.onclick = async () => {
+    await loadEsewaNumber();
+    state.walletModal = 'deposit'; render();
+  };
+  const withdrawBtn = document.getElementById('withdrawBtn');
+  if(withdrawBtn) withdrawBtn.onclick = () => { state.walletModal = 'withdraw'; render(); };
+
+  const closeWalletModal = document.getElementById('closeWalletModal');
+  if(closeWalletModal) closeWalletModal.onclick = () => { state.walletModal = null; render(); };
+
+  const submitDepositBtn = document.getElementById('submitDepositBtn');
+  if(submitDepositBtn) submitDepositBtn.onclick = async () => {
+    const amount = Number(document.getElementById('depAmount').value);
+    const senderEsewaNumber = document.getElementById('depSenderNumber').value.trim();
+    const transactionId = document.getElementById('depTxnId').value.trim();
+    const err = document.getElementById('walletErr');
+    if(!amount || amount <= 0){ err.textContent = 'Enter a valid amount'; err.style.display='block'; return; }
+    if(!transactionId){ err.textContent = 'Transaction ID is required'; err.style.display='block'; return; }
+    try{
+      await api('/transactions/deposit', 'POST', { amount, senderEsewaNumber, transactionId });
+      showToast('Deposit submitted! Waiting for verification.');
+      state.walletModal = null;
+      await loadMyTxns();
+      render();
+    }catch(e){ err.textContent = e.message; err.style.display='block'; }
+  };
+
+  const submitWithdrawBtn = document.getElementById('submitWithdrawBtn');
+  if(submitWithdrawBtn) submitWithdrawBtn.onclick = async () => {
+    const amount = Number(document.getElementById('wdAmount').value);
+    const receiverEsewaNumber = document.getElementById('wdReceiverNumber').value.trim();
+    const err = document.getElementById('walletErr');
+    if(!amount || amount <= 0){ err.textContent = 'Enter a valid amount'; err.style.display='block'; return; }
+    if(!receiverEsewaNumber){ err.textContent = 'eSewa number is required'; err.style.display='block'; return; }
+    try{
+      await api('/transactions/withdraw', 'POST', { amount, receiverEsewaNumber });
+      showToast('Withdrawal request submitted!');
+      state.walletModal = null;
+      // Reflect the deduction locally right away (backend already deducted it)
+      state.user.walletBalance = (state.user.walletBalance || 0) - amount;
+      localStorage_set('user', state.user);
+      await loadMyTxns();
+      render();
+    }catch(e){ err.textContent = e.message; err.style.display='block'; }
+  };
 }
 
 /* ============== INIT ============== */
@@ -734,6 +906,7 @@ function attachEvents(){
   if(state.token){
     await loadTournaments();
     await loadMyRegs();
+    await loadMyTxns();
   }
   render();
 })();
