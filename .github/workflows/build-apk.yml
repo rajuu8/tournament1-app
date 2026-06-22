@@ -31,9 +31,74 @@ jobs:
 
       - name: Add Android platform
         working-directory: ./apk-build
+        run: npx cap add android || true
+
+      - name: Sync Capacitor plugins (registers push notifications natively)
+        working-directory: ./apk-build
+        run: npx cap sync android
+
+      - name: Add notification permission to AndroidManifest
+        working-directory: ./apk-build/android
         run: |
-          npx cap add android || true
-          npx cap sync android
+          sed -i '/<manifest/a\    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' app/src/main/AndroidManifest.xml
+          echo "=== AndroidManifest.xml (first 15 lines) ==="
+          head -15 app/src/main/AndroidManifest.xml
+
+      - name: Add google-services.json for Firebase
+        working-directory: ./apk-build
+        run: cp firebase-config/google-services.json android/app/google-services.json
+
+      - name: Add Firebase Gradle plugin
+        working-directory: ./apk-build/android
+        run: |
+          python3 << 'PYEOF'
+          import re
+
+          # 1. Add classpath INSIDE the buildscript { dependencies { ... } } block specifically
+          with open('build.gradle', 'r') as f:
+              content = f.read()
+
+          # Match the dependencies block that is inside buildscript { ... }
+          match = re.search(r'(buildscript\s*\{.*?dependencies\s*\{)', content, re.DOTALL)
+          if match:
+              insert_point = match.end()
+              content = content[:insert_point] + "\n        classpath 'com.google.gms:google-services:4.4.2'" + content[insert_point:]
+          else:
+              print("WARNING: could not find buildscript dependencies block")
+
+          with open('build.gradle', 'w') as f:
+              f.write(content)
+
+          # 2. Append the plugin application at the END of app/build.gradle (Google's recommended approach)
+          with open('app/build.gradle', 'a') as f:
+              f.write("\napply plugin: 'com.google.gms.google-services'\n")
+
+          print("Gradle files patched successfully")
+          PYEOF
+
+      - name: Verify Gradle files (debug output)
+        working-directory: ./apk-build/android
+        run: |
+          echo "=== build.gradle ==="
+          cat build.gradle
+          echo "=== app/build.gradle (last 10 lines) ==="
+          tail -10 app/build.gradle
+
+      - name: Generate app icons and splash screen
+        working-directory: ./apk-build
+        run: |
+          npm install @capacitor/assets --save-dev
+          npx capacitor-assets generate --android
+
+      - name: Verify MainActivity has push notification registration
+        working-directory: ./apk-build/android
+        run: |
+          echo "=== MainActivity.java ==="
+          find app/src/main/java -name "MainActivity.java" -exec cat {} \;
+          echo "=== Installed Capacitor plugins ==="
+          cat ../node_modules/.bin/../../package.json | grep capacitor || true
+          echo "=== capacitor.settings.gradle (lists native plugin modules) ==="
+          cat capacitor.settings.gradle 2>/dev/null || echo "not found"
 
       - name: Grant execute permission for gradlew
         working-directory: ./apk-build/android
@@ -46,5 +111,5 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: battlezone-arena-apk
+          name: clashking-apk
           path: apk-build/android/app/build/outputs/apk/debug/app-debug.apk
