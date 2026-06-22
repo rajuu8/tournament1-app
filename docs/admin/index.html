@@ -3,18 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BattleZone Admin</title>
+<title>ClashKing Admin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Saira+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
   :root{
-    --bg-void: #0a0b0f;
-    --bg-panel: #14161d;
-    --bg-card: #1b1e28;
-    --line: #2a2e3a;
-    --flame: #ff4d2e;
-    --flame-dim: #ff4d2e33;
+    --bg-void: #08080a;
+    --bg-panel: #14131a;
+    --bg-card: #1c1a24;
+    --line: #2e2b38;
+    --flame: #d4920a;
+    --flame-dim: #d4920a33;
     --cyan: #2ee6d6;
     --cyan-dim: #2ee6d633;
     --gold: #ffc23c;
@@ -236,8 +236,8 @@ function renderAuth(){
   return `
     <div class="auth-screen">
       <div class="auth-logo">
-        <div class="sb-mark"><i class="fa-solid fa-shield-halved"></i></div>
-        <h1>BattleZone Admin</h1>
+        <div class="sb-mark"><i class="fa-solid fa-crown"></i></div>
+        <h1>ClashKing Admin</h1>
         <p style="color:var(--text-mid); font-size:13px; margin-top:4px;">Tournament Control Center</p>
       </div>
       <div class="auth-tabs">
@@ -266,8 +266,8 @@ function renderSidebar(){
   return `
     <div class="sidebar">
       <div class="sb-brand">
-        <div class="sb-mark"><i class="fa-solid fa-shield-halved"></i></div>
-        <div class="sb-name">BATTLE<span>ZONE</span><small>ADMIN PANEL</small></div>
+        <div class="sb-mark"><i class="fa-solid fa-crown"></i></div>
+        <div class="sb-name">CLASH<span>KING</span><small>ADMIN PANEL</small></div>
       </div>
       <button class="nav-link ${state.page==='tournaments'?'active':''}" data-page="tournaments"><i class="fa-solid fa-trophy"></i> <span class="mobile-hide">Tournaments</span></button>
       <button class="nav-link ${state.page==='registrations'?'active':''}" data-page="registrations"><i class="fa-solid fa-users"></i> <span class="mobile-hide">Players</span></button>

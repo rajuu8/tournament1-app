@@ -1,7 +1,7 @@
 {
-  "name": "battlezone-arena",
+  "name": "clashking",
   "version": "1.0.0",
-  "description": "BattleZone Arena Tournament App",
+  "description": "ClashKing - Battle Tournaments App",
   "scripts": {
     "build": "echo 'static site, no build needed'"
   },

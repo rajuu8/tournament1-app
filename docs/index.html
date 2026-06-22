@@ -3,18 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>BattleZone Arena</title>
+<title>ClashKing</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Saira+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
   :root{
-    --bg-void: #0a0b0f;
-    --bg-panel: #14161d;
-    --bg-card: #1b1e28;
-    --line: #2a2e3a;
-    --flame: #ff4d2e;
-    --flame-dim: #ff4d2e33;
+    --bg-void: #08080a;
+    --bg-panel: #14131a;
+    --bg-card: #1c1a24;
+    --line: #2e2b38;
+    --flame: #d4920a;
+    --flame-dim: #d4920a33;
     --cyan: #2ee6d6;
     --cyan-dim: #2ee6d633;
     --gold: #ffc23c;
@@ -57,7 +57,7 @@
   .brand{ display:flex; align-items:center; gap:10px; }
   .brand-mark{
     width:36px;height:36px; border-radius:9px;
-    background: linear-gradient(135deg, var(--flame), #ff8a3c);
+    background: linear-gradient(135deg, var(--flame), #ffd97a);
     display:flex;align-items:center;justify-content:center;
     box-shadow: 0 0 18px var(--flame-dim);
     font-weight:800;
@@ -189,7 +189,7 @@
   .field input:focus, .field select:focus{ outline:none; border-color: var(--flame); }
 
   .primary-btn{
-    width:100%; background: linear-gradient(135deg, var(--flame), #ff7a3c);
+    width:100%; background: linear-gradient(135deg, var(--flame), #ffd97a);
     color:#fff; border:none; border-radius:11px; padding:15px;
     font-family:'Saira Condensed'; font-weight:700; font-size:15px;
     text-transform:uppercase; letter-spacing:0.04em; margin-top:8px;
@@ -236,7 +236,7 @@
     width:30px; height:30px; border-radius:8px; background: var(--bg-panel);
     display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; flex-shrink:0;
   }
-  .lb-rank.top1{ background: linear-gradient(135deg,#ffc23c,#ff8a3c); color:#1a1200; }
+  .lb-rank.top1{ background: linear-gradient(135deg,#ffc23c,#ffd97a); color:#1a1200; }
   .lb-rank.top2{ background:#c9ccd4; color:#1a1200; }
   .lb-rank.top3{ background:#d98a52; color:#1a1200; }
   .lb-info{ flex:1; }
@@ -428,8 +428,8 @@ function renderLogin(){
   return `
     <div class="auth-screen">
       <div class="auth-logo">
-        <div class="brand-mark"><i class="fa-solid fa-skull"></i></div>
-        <h1>BattleZone <span style="color:var(--flame)">Arena</span></h1>
+        <div class="brand-mark"><i class="fa-solid fa-crown"></i></div>
+        <h1>Clash<span style="color:var(--flame)">King</span></h1>
         <p>Free Fire & PUBG Tournaments</p>
       </div>
       <div class="error-msg" id="err"></div>
@@ -445,7 +445,7 @@ function renderSignup(){
   return `
     <div class="auth-screen">
       <div class="auth-logo">
-        <div class="brand-mark"><i class="fa-solid fa-skull"></i></div>
+        <div class="brand-mark"><i class="fa-solid fa-crown"></i></div>
         <h1>Join the <span style="color:var(--flame)">Arena</span></h1>
         <p>Create your warrior profile</p>
       </div>
@@ -468,8 +468,8 @@ function renderHome(){
   return `
     <div class="topbar">
       <div class="brand">
-        <div class="brand-mark"><i class="fa-solid fa-skull"></i></div>
-        <div class="brand-name">BATTLE<span>ZONE</span></div>
+        <div class="brand-mark"><i class="fa-solid fa-crown"></i></div>
+        <div class="brand-name">CLASH<span>KING</span></div>
       </div>
       <div class="wallet-chip"><i class="fa-solid fa-coins"></i> ₨${state.user?.walletBalance || 0}</div>
     </div>
@@ -963,7 +963,7 @@ function attachEvents(){
   if(copyReferralBtn) copyReferralBtn.onclick = () => {
     const code = state.user?.referralCode || '';
     if(!code) return;
-    const text = `Join BattleZone Arena using my referral code ${code} and let's win together! 🔥`;
+    const text = `Join ClashKing using my referral code ${code} and let's win together! 🔥`;
     if(navigator.clipboard && navigator.clipboard.writeText){
       navigator.clipboard.writeText(text).then(()=> showToast('Referral message copied!'));
     } else {
