@@ -54,24 +54,34 @@ jobs:
           python3 << 'PYEOF'
           import re
 
-          # 1. Add classpath INSIDE the buildscript { dependencies { ... } } block specifically
+          # 1. Add classpath INSIDE buildscript { dependencies { ... } } - but ONLY if not already present
           with open('build.gradle', 'r') as f:
               content = f.read()
 
-          # Match the dependencies block that is inside buildscript { ... }
-          match = re.search(r'(buildscript\s*\{.*?dependencies\s*\{)', content, re.DOTALL)
-          if match:
-              insert_point = match.end()
-              content = content[:insert_point] + "\n        classpath 'com.google.gms:google-services:4.4.2'" + content[insert_point:]
+          if 'com.google.gms:google-services' not in content:
+              match = re.search(r'(buildscript\s*\{.*?dependencies\s*\{)', content, re.DOTALL)
+              if match:
+                  insert_point = match.end()
+                  content = content[:insert_point] + "\n        classpath 'com.google.gms:google-services:4.4.2'" + content[insert_point:]
+              else:
+                  print("WARNING: could not find buildscript dependencies block")
+              with open('build.gradle', 'w') as f:
+                  f.write(content)
+              print("Added google-services classpath to build.gradle")
           else:
-              print("WARNING: could not find buildscript dependencies block")
+              print("google-services classpath already present in build.gradle - skipping (avoids duplicate)")
 
-          with open('build.gradle', 'w') as f:
-              f.write(content)
-
-          # 2. Append the plugin application at the END of app/build.gradle (Google's recommended approach)
-          with open('app/build.gradle', 'a') as f:
-              f.write("\napply plugin: 'com.google.gms.google-services'\n")
+          # 2. Capacitor 6's app/build.gradle ALREADY conditionally applies the google-services
+          #    plugin if google-services.json exists (see the try/catch block it generates).
+          #    So we do NOT need to apply it again - doing so causes a duplicate plugin error.
+          with open('app/build.gradle', 'r') as f:
+              app_content = f.read()
+          if app_content.count("apply plugin: 'com.google.gms.google-services'") > 0:
+              print("app/build.gradle already applies google-services plugin conditionally - no action needed")
+          else:
+              with open('app/build.gradle', 'a') as f:
+                  f.write("\napply plugin: 'com.google.gms.google-services'\n")
+              print("Appended google-services plugin application")
 
           print("Gradle files patched successfully")
           PYEOF
