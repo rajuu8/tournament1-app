@@ -1,0 +1,73 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'apk-build/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install dependencies
+        working-directory: ./apk-build
+        run: npm install
+
+      - name: Add Android platform
+        working-directory: ./apk-build
+        run: npx cap add android || true
+
+      - name: Sync Capacitor plugins (registers push notifications natively)
+        working-directory: ./apk-build
+        run: npx cap sync android
+
+      - name: Add notification permission to AndroidManifest
+        working-directory: ./apk-build/android
+        run: |
+          sed -i '/<manifest/a\    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' app/src/main/AndroidManifest.xml
+
+      - name: Add google-services.json for Firebase
+        working-directory: ./apk-build
+        run: cp firebase-config/google-services.json android/app/google-services.json
+
+      - name: Add Firebase Gradle plugin
+        working-directory: ./apk-build/android
+        run: |
+          sed -i "s/dependencies {/dependencies {\n        classpath 'com.google.gms:google-services:4.4.2'/" build.gradle
+          sed -i "1i apply plugin: 'com.google.gms.google-services'" app/build.gradle
+
+      - name: Generate app icons and splash screen
+        working-directory: ./apk-build
+        run: |
+          npm install @capacitor/assets --save-dev
+          npx capacitor-assets generate --android
+
+      - name: Grant execute permission for gradlew
+        working-directory: ./apk-build/android
+        run: chmod +x gradlew
+
+      - name: Build Debug APK
+        working-directory: ./apk-build/android
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clashking-apk
+          path: apk-build/android/app/build/outputs/apk/debug/app-debug.apk
