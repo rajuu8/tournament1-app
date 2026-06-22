@@ -887,7 +887,7 @@ function attachEvents(){
       if(data.dailyBonus){
         setTimeout(()=> showToast(`🎁 Daily login bonus: +₨${data.dailyBonus.amount} (Day ${data.dailyBonus.streak} streak)`), 400);
       }
-      setupPushNotifications();
+      setTimeout(setupPushNotifications, 1500);
     }catch(e){ errBox.textContent = e.message; errBox.style.display='block'; }
   };
 
@@ -908,7 +908,7 @@ function attachEvents(){
       state.screen = 'home';
       await loadTournaments(); await loadMyRegs();
       render();
-      setupPushNotifications();
+      setTimeout(setupPushNotifications, 1500);
     }catch(e){ errBox.textContent = e.message; errBox.style.display='block'; }
   };
 
@@ -1023,17 +1023,29 @@ function attachEvents(){
 /* ============== PUSH NOTIFICATIONS ============== */
 async function setupPushNotifications(){
   // Only works inside the Capacitor APK wrapper - silently does nothing on a plain web browser
-  if(!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.PushNotifications) return;
+  try{
+    if(!window.Capacitor || !window.Capacitor.isNativePlatform || !window.Capacitor.isNativePlatform()) return;
+    if(!window.Capacitor.Plugins || !window.Capacitor.Plugins.PushNotifications) return;
+  }catch(e){ return; }
+
   const { PushNotifications } = window.Capacitor.Plugins;
 
   try{
-    const permStatus = await PushNotifications.checkPermissions();
+    let permStatus;
+    try{
+      permStatus = await PushNotifications.checkPermissions();
+    }catch(e){ return; } // plugin not properly linked - bail out quietly
+
     if(permStatus.receive !== 'granted'){
-      const req = await PushNotifications.requestPermissions();
-      if(req.receive !== 'granted') return;
+      try{
+        const req = await PushNotifications.requestPermissions();
+        if(req.receive !== 'granted') return;
+      }catch(e){ return; }
     }
 
-    await PushNotifications.register();
+    try{
+      await PushNotifications.register();
+    }catch(e){ return; }
 
     PushNotifications.addListener('registration', async (token) => {
       try{
@@ -1045,9 +1057,7 @@ async function setupPushNotifications(){
       console.error('Push registration error:', err);
     });
 
-    // Foreground notification tap/display handling
     PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-      // Bring user to home/arena screen when they tap a notification
       state.screen = 'home';
       loadTournaments().then(render);
     });
@@ -1061,7 +1071,7 @@ async function setupPushNotifications(){
     await loadTournaments();
     await loadMyRegs();
     await loadMyTxns();
-    setupPushNotifications();
+    setTimeout(setupPushNotifications, 1500);
   }
   render();
 })();
