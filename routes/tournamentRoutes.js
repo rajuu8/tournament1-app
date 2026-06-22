@@ -1,6 +1,8 @@
 const express = require('express');
 const Tournament = require('../models/Tournament');
+const Registration = require('../models/Registration');
 const { protect, adminOnly } = require('../middleware/authMiddleware');
+const { sendPushToMany } = require('../config/firebase');
 
 const router = express.Router();
 
@@ -46,10 +48,26 @@ router.post('/', protect, adminOnly, async (req, res) => {
 // @desc    Update tournament (admin only) - e.g. release room ID, change status
 router.put('/:id', protect, adminOnly, async (req, res) => {
   try {
+    const before = await Tournament.findById(req.params.id);
+    if (!before) return res.status(404).json({ message: 'Tournament not found' });
+
     const tournament = await Tournament.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
     });
-    if (!tournament) return res.status(404).json({ message: 'Tournament not found' });
+
+    // If room ID was just released (was empty, now has a value), notify all registered players
+    const roomJustReleased = !before.roomId && tournament.roomId;
+    if (roomJustReleased) {
+      const regs = await Registration.find({ tournament: tournament._id }).populate('user', 'fcmToken');
+      const tokens = regs.map(r => r.user?.fcmToken).filter(Boolean);
+      sendPushToMany(
+        tokens,
+        '🔑 Room ID Released!',
+        `${tournament.title} - Room details are now available. Get ready!`,
+        { tournamentId: tournament._id.toString(), type: 'room_released' }
+      );
+    }
+
     res.json(tournament);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });

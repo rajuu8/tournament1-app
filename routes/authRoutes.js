@@ -207,4 +207,16 @@ router.get('/me', protect, async (req, res) => {
   }
 });
 
+// @route   PUT /api/auth/fcm-token
+// @desc    Save/update the player's Firebase push notification token
+router.put('/fcm-token', protect, async (req, res) => {
+  try {
+    const { fcmToken } = req.body;
+    await User.findByIdAndUpdate(req.user.id, { fcmToken });
+    res.json({ message: 'Token saved' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 module.exports = router;

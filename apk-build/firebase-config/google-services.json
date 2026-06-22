@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "787990253833",
+    "project_id": "clashking-640f3",
+    "storage_bucket": "clashking-640f3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:787990253833:android:3c3a87bdb82611893903d8",
+        "android_client_info": {
+          "package_name": "com.rajuu8.clashking"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB0rDg7AIs46Jmtj_qWYKQAanvpClSGwTY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

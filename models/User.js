@@ -18,6 +18,8 @@ const userSchema = new mongoose.Schema(
 
     lastLoginDate: { type: String, default: '' }, // 'YYYY-MM-DD' for daily login streak
     loginStreak: { type: Number, default: 0 },
+
+    fcmToken: { type: String, default: '' }, // Firebase Cloud Messaging token for push notifications
   },
   { timestamps: true }
 );

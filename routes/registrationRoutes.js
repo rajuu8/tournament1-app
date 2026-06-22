@@ -3,6 +3,7 @@ const Registration = require('../models/Registration');
 const Tournament = require('../models/Tournament');
 const User = require('../models/User');
 const { protect, adminOnly } = require('../middleware/authMiddleware');
+const { sendPushNotification } = require('../config/firebase');
 
 const router = express.Router();
 
@@ -58,9 +59,16 @@ router.post('/join/:tournamentId', protect, async (req, res) => {
         user.walletBalance += REFERRAL_BONUS;
         user.referralBonusCredited = true;
         await user.save();
-        await User.findByIdAndUpdate(user.referredBy, {
+        const referrer = await User.findByIdAndUpdate(user.referredBy, {
           $inc: { walletBalance: REFERRAL_BONUS, referralCount: 1 },
         });
+
+        if (user.fcmToken) {
+          sendPushNotification(user.fcmToken, '🎁 Referral Bonus!', `You earned ₨${REFERRAL_BONUS} for joining your first tournament!`, { type: 'referral_bonus' });
+        }
+        if (referrer?.fcmToken) {
+          sendPushNotification(referrer.fcmToken, '🎁 Referral Bonus!', `Your friend joined a tournament! You earned ₨${REFERRAL_BONUS}.`, { type: 'referral_bonus' });
+        }
       }
     }
 
@@ -123,6 +131,10 @@ router.put('/:id/result', protect, adminOnly, async (req, res) => {
     // Auto-credit wallet the first time a prize amount is set (avoids double-paying on edits)
     if (!alreadyPaid && newPrize > 0) {
       await User.findByIdAndUpdate(registration.user, { $inc: { walletBalance: newPrize } });
+      const winner = await User.findById(registration.user);
+      if (winner?.fcmToken) {
+        sendPushNotification(winner.fcmToken, '🏆 Prize Won!', `Congratulations! ₨${newPrize} has been added to your wallet.`, { type: 'prize_credited' });
+      }
     } else if (alreadyPaid && newPrize !== before.prizeWon) {
       // Admin corrected the amount after it was already paid - adjust the difference
       const diff = newPrize - before.prizeWon;

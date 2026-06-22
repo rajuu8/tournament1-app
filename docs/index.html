@@ -887,6 +887,7 @@ function attachEvents(){
       if(data.dailyBonus){
         setTimeout(()=> showToast(`🎁 Daily login bonus: +₨${data.dailyBonus.amount} (Day ${data.dailyBonus.streak} streak)`), 400);
       }
+      setupPushNotifications();
     }catch(e){ errBox.textContent = e.message; errBox.style.display='block'; }
   };
 
@@ -907,6 +908,7 @@ function attachEvents(){
       state.screen = 'home';
       await loadTournaments(); await loadMyRegs();
       render();
+      setupPushNotifications();
     }catch(e){ errBox.textContent = e.message; errBox.style.display='block'; }
   };
 
@@ -1018,6 +1020,40 @@ function attachEvents(){
   };
 }
 
+/* ============== PUSH NOTIFICATIONS ============== */
+async function setupPushNotifications(){
+  // Only works inside the Capacitor APK wrapper - silently does nothing on a plain web browser
+  if(!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.PushNotifications) return;
+  const { PushNotifications } = window.Capacitor.Plugins;
+
+  try{
+    const permStatus = await PushNotifications.checkPermissions();
+    if(permStatus.receive !== 'granted'){
+      const req = await PushNotifications.requestPermissions();
+      if(req.receive !== 'granted') return;
+    }
+
+    await PushNotifications.register();
+
+    PushNotifications.addListener('registration', async (token) => {
+      try{
+        await api('/auth/fcm-token', 'PUT', { fcmToken: token.value });
+      }catch(e){ /* silent */ }
+    });
+
+    PushNotifications.addListener('registrationError', (err) => {
+      console.error('Push registration error:', err);
+    });
+
+    // Foreground notification tap/display handling
+    PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+      // Bring user to home/arena screen when they tap a notification
+      state.screen = 'home';
+      loadTournaments().then(render);
+    });
+  }catch(e){ /* silent - push notifications are a nice-to-have, never block the app */ }
+}
+
 /* ============== INIT ============== */
 (async function init(){
   if(state.token){
@@ -1025,6 +1061,7 @@ function attachEvents(){
     await loadTournaments();
     await loadMyRegs();
     await loadMyTxns();
+    setupPushNotifications();
   }
   render();
 })();

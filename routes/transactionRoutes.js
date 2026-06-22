@@ -3,6 +3,7 @@ const Transaction = require('../models/Transaction');
 const Settings = require('../models/Settings');
 const User = require('../models/User');
 const { protect, adminOnly } = require('../middleware/authMiddleware');
+const { sendPushNotification } = require('../config/firebase');
 
 const router = express.Router();
 
@@ -149,6 +150,18 @@ router.put('/:id/approve', protect, adminOnly, async (req, res) => {
     txn.status = 'Approved';
     txn.adminNote = req.body.adminNote || '';
     await txn.save();
+
+    const user = await User.findById(txn.user);
+    if (user?.fcmToken) {
+      sendPushNotification(
+        user.fcmToken,
+        txn.type === 'Deposit' ? '💰 Deposit Approved!' : '💸 Withdrawal Sent!',
+        txn.type === 'Deposit'
+          ? `₨${txn.amount} has been added to your wallet.`
+          : `₨${txn.amount} has been sent to your eSewa.`,
+        { type: 'transaction_approved' }
+      );
+    }
 
     res.json(txn);
   } catch (err) {

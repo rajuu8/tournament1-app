@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
+const { initFirebase } = require('./config/firebase');
 
 const authRoutes = require('./routes/authRoutes');
 const tournamentRoutes = require('./routes/tournamentRoutes');
@@ -16,6 +17,9 @@ app.use(express.json());
 
 // Connect to MongoDB
 connectDB();
+
+// Initialize Firebase Admin (for push notifications)
+initFirebase();
 
 // Routes
 app.use('/api/auth', authRoutes);
