@@ -122,6 +122,10 @@
   }
   .t-tag.free{ background: var(--cyan-dim); color: var(--cyan); }
   .t-tag.paid{ background: #ffc23c22; color: var(--gold); }
+  .badge{ display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; text-transform:uppercase; }
+  .badge.verified{ background:#3ddc8422; color:var(--success); }
+  .badge.rejected{ background:#ff3b5c22; color:var(--danger); }
+  .badge.pending{ background:#ffc23c22; color:var(--gold); }
   .t-tag.live{ background: #3ddc8422; color: var(--success); }
   .t-tag.live i{ animation: blink 1.2s infinite; }
   @keyframes blink{ 50%{opacity:0.3;} }
@@ -263,6 +267,37 @@
 
   ::-webkit-scrollbar{ display:none; }
 
+  @keyframes loaderSlide{
+    0%{ transform: translateX(-100%); }
+    100%{ transform: translateX(250%); }
+  }
+
+  /* Skeleton loading placeholders for slow connections */
+  .skeleton{
+    background: linear-gradient(90deg, var(--bg-card) 25%, var(--line) 50%, var(--bg-card) 75%);
+    background-size: 200% 100%;
+    animation: skeletonShine 1.5s ease-in-out infinite;
+    border-radius: 8px;
+  }
+  @keyframes skeletonShine{
+    0%{ background-position: 200% 0; }
+    100%{ background-position: -200% 0; }
+  }
+  .skeleton-card{
+    background: var(--bg-card); border:1px solid var(--line); border-radius:16px;
+    padding:14px; margin-bottom:14px;
+  }
+
+  .retry-banner{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:#ff3b5c14; border:1px solid #ff3b5c44; border-radius:12px;
+    padding:12px 14px; margin: 0 16px 14px; font-size:13px; color:var(--text-mid);
+  }
+  .retry-banner button{
+    background: var(--danger); color:#fff; border:none; border-radius:8px;
+    padding:6px 12px; font-weight:700; font-size:12px; font-family:'Rajdhani'; flex-shrink:0;
+  }
+
   /* ---------- Wallet & Modal ---------- */
   .modal-overlay{ position:fixed; inset:0; background:#000000c0; display:none; align-items:flex-end; justify-content:center; z-index:300; }
   .modal-overlay.show{ display:flex; }
@@ -320,6 +355,9 @@
 </head>
 <body>
 
+<div id="globalLoader" style="display:none; position:fixed; top:0; left:0; width:100%; height:3px; z-index:999; background:transparent; overflow:hidden;">
+  <div style="width:40%; height:100%; background:linear-gradient(90deg, transparent, var(--gold), transparent); animation: loaderSlide 1.1s ease-in-out infinite;"></div>
+</div>
 <div id="app"></div>
 <div class="toast" id="toast"><i class="fa-solid fa-circle-check"></i><span id="toast-msg"></span></div>
 
@@ -342,6 +380,7 @@ let state = {
   esewaNumber: '',
   walletModal: null, // null | 'deposit' | 'withdraw'
   loading: false,
+  loadError: null,
 };
 
 // Simple in-memory storage fallback (artifacts can't use localStorage reliably across all hosts,
@@ -357,18 +396,65 @@ function localStorage_clear(){
 }
 
 /* ============== API HELPER ============== */
-async function api(path, method='GET', body=null, auth=true){
+let activeRequests = 0;
+
+function updateGlobalLoader(){
+  const el = document.getElementById('globalLoader');
+  if(!el) return;
+  el.style.display = activeRequests > 0 ? 'flex' : 'none';
+}
+
+async function api(path, method='GET', body=null, auth=true, timeoutMs=15000){
   const headers = { 'Content-Type': 'application/json' };
   if(auth && state.token) headers['Authorization'] = 'Bearer ' + state.token;
+
+  activeRequests++; updateGlobalLoader();
+
+  const controller = new AbortController();
+  const timer = setTimeout(()=> controller.abort(), timeoutMs);
+
   try{
     const res = await fetch(API_BASE + path, {
-      method, headers, body: body ? JSON.stringify(body) : undefined
+      method, headers, body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
     });
+    clearTimeout(timer);
+
+    let data;
+    try{ data = await res.json(); }
+    catch(e){ throw new Error('Server gave an unexpected response. Please try again.'); }
+
+    if(!res.ok) throw new Error(data.message || 'Something went wrong');
+    return data;
+  }catch(err){
+    clearTimeout(timer);
+    if(err.name === 'AbortError'){
+      throw new Error('Connection is slow. Please check your internet and try again.');
+    }
+    if(err.message === 'Failed to fetch' || err instanceof TypeError){
+      throw new Error('No internet connection. Please check your network.');
+    }
+    throw err;
+  }finally{
+    activeRequests--; updateGlobalLoader();
+  }
+}
+
+// For file uploads (screenshots) - uses FormData, no Content-Type header (browser sets it with boundary)
+async function apiUpload(path, formData){
+  const headers = {};
+  if(state.token) headers['Authorization'] = 'Bearer ' + state.token;
+  activeRequests++; updateGlobalLoader();
+  try{
+    const res = await fetch(API_BASE + path, { method: 'POST', headers, body: formData });
     const data = await res.json();
     if(!res.ok) throw new Error(data.message || 'Something went wrong');
     return data;
   }catch(err){
+    if(err.message === 'Failed to fetch') throw new Error('No internet connection. Please check your network.');
     throw err;
+  }finally{
+    activeRequests--; updateGlobalLoader();
   }
 }
 
@@ -492,15 +578,26 @@ function renderHome(){
       <span class="count">${filtered.length} matches</span>
     </div>
 
+    ${state.loadError ? `
+      <div class="retry-banner">
+        <span><i class="fa-solid fa-wifi" style="margin-right:6px;"></i>${state.loadError}</span>
+        <button id="retryLoadBtn">Retry</button>
+      </div>
+    ` : ''}
+
     <div class="t-list">
-      ${state.loading ? '<div class="loader"><i class="fa-solid fa-spinner"></i></div>' : ''}
-      ${!state.loading && filtered.length === 0 ? `
+      ${state.loading ? `
+        <div class="skeleton-card"><div class="skeleton" style="height:14px; width:40%; margin-bottom:10px;"></div><div class="skeleton" style="height:20px; width:70%; margin-bottom:12px;"></div><div class="skeleton" style="height:8px; width:100%;"></div></div>
+        <div class="skeleton-card"><div class="skeleton" style="height:14px; width:40%; margin-bottom:10px;"></div><div class="skeleton" style="height:20px; width:70%; margin-bottom:12px;"></div><div class="skeleton" style="height:8px; width:100%;"></div></div>
+        <div class="skeleton-card"><div class="skeleton" style="height:14px; width:40%; margin-bottom:10px;"></div><div class="skeleton" style="height:20px; width:70%; margin-bottom:12px;"></div><div class="skeleton" style="height:8px; width:100%;"></div></div>
+      ` : ''}
+      ${!state.loading && !state.loadError && filtered.length === 0 ? `
         <div class="empty-state">
           <i class="fa-solid fa-ghost"></i>
           No tournaments yet for ${state.game}.<br>Check back soon, warrior.
         </div>
       ` : ''}
-      ${filtered.map(renderCard).join('')}
+      ${!state.loading ? filtered.map(renderCard).join('') : ''}
     </div>
   `;
 }
@@ -512,6 +609,7 @@ function renderCard(t){
   const alreadyJoined = state.myRegs.some(r => r.tournament && (r.tournament._id === t._id));
   return `
     <div class="t-card ${isLive?'live':''}" data-id="${t._id}">
+      ${t.bannerImage ? `<div style="width:100%; height:120px; overflow:hidden;"><img src="${t.bannerImage}" loading="lazy" style="width:100%; height:100%; object-fit:cover; display:block;"></div>` : ''}
       <div class="t-card-top">
         <div>
           <span class="t-tag ${isLive ? 'live' : (t.mode==='Free'?'free':'paid')}">
@@ -522,6 +620,7 @@ function renderCard(t){
             <span><i class="fa-solid fa-users"></i> ${t.matchType}</span>
             <span><i class="fa-solid fa-calendar"></i> ${fmtDate(t.matchDate)}</span>
           </div>
+          ${t.perKillReward > 0 ? `<div class="t-meta" style="margin-top:4px;"><span style="color:var(--gold); font-weight:700;"><i class="fa-solid fa-skull-crossbones"></i> ₨${t.perKillReward}/kill</span></div>` : ''}
         </div>
         <div class="t-prize">
           <div class="amt">₨${t.prizePool}</div>
@@ -555,6 +654,7 @@ function renderDetail(){
 
     <div style="padding: 16px;">
       <div class="t-card" style="cursor:default;">
+        ${t.bannerImage ? `<div style="width:100%; height:160px; overflow:hidden;"><img src="${t.bannerImage}" style="width:100%; height:100%; object-fit:cover; display:block;"></div>` : ''}
         <div class="t-card-top">
           <div>
             <span class="t-tag ${t.status==='Live' ? 'live' : (t.mode==='Free'?'free':'paid')}">
@@ -567,6 +667,7 @@ function renderDetail(){
             <div class="t-meta" style="margin-top:6px;">
               <span><i class="fa-solid fa-calendar"></i> ${fmtDate(t.matchDate)}</span>
             </div>
+            ${t.perKillReward > 0 ? `<div class="t-meta" style="margin-top:6px;"><span style="color:var(--gold); font-weight:700;"><i class="fa-solid fa-skull-crossbones"></i> ₨${t.perKillReward} per kill</span></div>` : ''}
           </div>
           <div class="t-prize">
             <div class="amt">₨${t.prizePool}</div>
@@ -612,6 +713,7 @@ function renderDetail(){
     <div style="padding: 0 16px 24px; position:sticky; bottom:0;">
       ${alreadyJoined ? `
         <button class="ghost-btn" disabled style="opacity:0.6;"><i class="fa-solid fa-check"></i> Already Registered</button>
+        ${renderScreenshotSection()}
       ` : isFull ? `
         <button class="ghost-btn" disabled style="opacity:0.6;">Tournament Full</button>
       ` : `
@@ -619,6 +721,26 @@ function renderDetail(){
           <i class="fa-solid fa-bolt"></i> ${t.mode === 'Free' ? 'Join Free Tournament' : 'Join · Pay ₨' + t.entryFee}
         </button>
       `}
+    </div>
+  `;
+}
+
+function renderScreenshotSection(){
+  const myReg = state.myRegs.find(r => r.tournament && r.tournament._id === state.activeTournament._id);
+  const screenshot = myReg?.resultScreenshot;
+  const status = myReg?.screenshotStatus || 'Not Submitted';
+
+  return `
+    <div class="room-box" style="margin: 14px 0 0;">
+      <div class="rb-title"><i class="fa-solid fa-camera"></i> Match Result Proof</div>
+      ${screenshot ? `
+        <img src="${screenshot}" style="width:100%; border-radius:10px; margin-bottom:10px; max-height:160px; object-fit:cover;">
+        <span class="badge ${status==='Verified'?'verified':status==='Rejected'?'rejected':'pending'}" style="margin-bottom:8px; display:inline-block;">${status}</span>
+      ` : `<p style="font-size:12px; color:var(--text-low); margin-bottom:10px;">If you won or got kills, upload your in-game scoreboard screenshot as proof to claim your prize faster.</p>`}
+      <input type="file" id="screenshotFile" accept="image/*" style="display:none;">
+      <button class="ghost-btn" id="uploadScreenshotBtn" style="margin-top:${screenshot?'0':'0'};">
+        <i class="fa-solid fa-upload"></i> ${screenshot ? 'Replace Screenshot' : 'Upload Screenshot'}
+      </button>
     </div>
   `;
 }
@@ -804,10 +926,13 @@ function renderLeaderboard(){
 }
 
 async function loadTournaments(){
-  state.loading = true; render();
+  state.loading = true; state.loadError = null; render();
   try{
     state.tournaments = await api('/tournaments', 'GET', null, false);
-  }catch(e){ showToast(e.message, true); }
+  }catch(e){
+    state.loadError = e.message;
+    showToast(e.message, true);
+  }
   state.loading = false; render();
 }
 
@@ -877,6 +1002,10 @@ function attachEvents(){
     const password = document.getElementById('password').value;
     const errBox = document.getElementById('err');
     if(!phone || !password){ errBox.textContent = 'Please fill all fields'; errBox.style.display='block'; return; }
+    errBox.style.display = 'none';
+    loginBtn.disabled = true;
+    const originalHtml = loginBtn.innerHTML;
+    loginBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Logging in...';
     try{
       const data = await api('/auth/login', 'POST', { phone, password }, false);
       state.token = data.token; state.user = data.user;
@@ -888,7 +1017,10 @@ function attachEvents(){
         setTimeout(()=> showToast(`🎁 Daily login bonus: +₨${data.dailyBonus.amount} (Day ${data.dailyBonus.streak} streak)`), 400);
       }
       setTimeout(setupPushNotifications, 1500);
-    }catch(e){ errBox.textContent = e.message; errBox.style.display='block'; }
+    }catch(e){
+      errBox.textContent = e.message; errBox.style.display='block';
+      loginBtn.disabled = false; loginBtn.innerHTML = originalHtml;
+    }
   };
 
   const signupBtn = document.getElementById('signupBtn');
@@ -901,6 +1033,10 @@ function attachEvents(){
     const referralCode = document.getElementById('referralCode').value.trim();
     const errBox = document.getElementById('err');
     if(!name || !phone || !password){ errBox.textContent = 'Name, phone & password are required'; errBox.style.display='block'; return; }
+    errBox.style.display = 'none';
+    signupBtn.disabled = true;
+    const originalHtml = signupBtn.innerHTML;
+    signupBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creating account...';
     try{
       const data = await api('/auth/register', 'POST', { name, phone, password, gameId, gameUid, referralCode }, false);
       state.token = data.token; state.user = data.user;
@@ -909,10 +1045,17 @@ function attachEvents(){
       await loadTournaments(); await loadMyRegs();
       render();
       setTimeout(setupPushNotifications, 1500);
-    }catch(e){ errBox.textContent = e.message; errBox.style.display='block'; }
+    }catch(e){
+      errBox.textContent = e.message; errBox.style.display='block';
+      signupBtn.disabled = false; signupBtn.innerHTML = originalHtml;
+    }
   };
 
   // Game tabs
+  // Retry button on network error
+  const retryLoadBtn = document.getElementById('retryLoadBtn');
+  if(retryLoadBtn) retryLoadBtn.onclick = () => loadTournaments();
+
   app.querySelectorAll('.game-tab').forEach(btn => {
     btn.onclick = () => { state.game = btn.dataset.game; render(); };
   });
@@ -930,6 +1073,9 @@ function attachEvents(){
   const joinDetailBtn = document.getElementById('joinDetailBtn');
   if(joinDetailBtn) joinDetailBtn.onclick = async () => {
     const t = state.activeTournament;
+    joinDetailBtn.disabled = true;
+    const originalHtml = joinDetailBtn.innerHTML;
+    joinDetailBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Joining...';
     try{
       await api('/registrations/join/' + t._id, 'POST', { teamName: state.user.name });
       showToast('Joined successfully! 🔥');
@@ -937,8 +1083,39 @@ function attachEvents(){
       await loadMyRegs();
       await openTournament(t._id);
       await loadTournaments();
-    }catch(e){ showToast(e.message, true); }
+    }catch(e){
+      showToast(e.message, true);
+      joinDetailBtn.disabled = false; joinDetailBtn.innerHTML = originalHtml;
+    }
   };
+
+  // Screenshot upload - clicking the visible button triggers the hidden file input
+  const uploadScreenshotBtn = document.getElementById('uploadScreenshotBtn');
+  const screenshotFile = document.getElementById('screenshotFile');
+  if(uploadScreenshotBtn && screenshotFile){
+    uploadScreenshotBtn.onclick = () => screenshotFile.click();
+
+    screenshotFile.onchange = async () => {
+      if(!screenshotFile.files[0]) return;
+      const myReg = state.myRegs.find(r => r.tournament && r.tournament._id === state.activeTournament._id);
+      if(!myReg){ showToast('Could not find your registration', true); return; }
+
+      const originalHtml = uploadScreenshotBtn.innerHTML;
+      uploadScreenshotBtn.disabled = true;
+      uploadScreenshotBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
+      try{
+        const formData = new FormData();
+        formData.append('screenshot', screenshotFile.files[0]);
+        await apiUpload('/registrations/' + myReg._id + '/screenshot', formData);
+        showToast('Screenshot uploaded! Admin will review it. 📸');
+        await loadMyRegs();
+        render();
+      }catch(e){
+        showToast(e.message, true);
+        uploadScreenshotBtn.disabled = false; uploadScreenshotBtn.innerHTML = originalHtml;
+      }
+    };
+  }
 
   // Bottom nav
   app.querySelectorAll('.nav-item').forEach(btn => {

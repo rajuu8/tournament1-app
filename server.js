@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
 const { initFirebase } = require('./config/firebase');
+const { initCloudinary } = require('./config/cloudinary');
 
 const authRoutes = require('./routes/authRoutes');
 const tournamentRoutes = require('./routes/tournamentRoutes');
@@ -20,6 +21,9 @@ connectDB();
 
 // Initialize Firebase Admin (for push notifications)
 initFirebase();
+
+// Initialize Cloudinary (for screenshot uploads)
+initCloudinary();
 
 // Routes
 app.use('/api/auth', authRoutes);

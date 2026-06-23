@@ -4,10 +4,15 @@ const tournamentSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
     game: { type: String, enum: ['Free Fire', 'PUBG'], required: true },
-    matchType: { type: String, default: 'Squad' }, // Solo / Duo / Squad
+    matchType: {
+      type: String,
+      enum: ['Solo', 'Duo', 'Squad', 'Classic Squad', 'Lone Wolf', '1v1'],
+      default: 'Squad',
+    },
     mode: { type: String, enum: ['Free', 'Paid'], default: 'Free' },
     entryFee: { type: Number, default: 0 },
     prizePool: { type: Number, default: 0 },
+    perKillReward: { type: Number, default: 0 }, // ₨ awarded per confirmed kill
     maxSlots: { type: Number, required: true },
     filledSlots: { type: Number, default: 0 },
     matchDate: { type: Date, required: true },
@@ -18,6 +23,7 @@ const tournamentSchema = new mongoose.Schema(
       enum: ['Upcoming', 'Live', 'Completed', 'Cancelled'],
       default: 'Upcoming',
     },
+    bannerImage: { type: String, default: '' }, // Cloudinary URL, shown on tournament card
     description: { type: String, default: '' },
   },
   { timestamps: true }

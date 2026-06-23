@@ -191,6 +191,16 @@ async function api(path, method='GET', body=null, auth=true){
   return data;
 }
 
+// For file uploads (banners, screenshots) - uses FormData, no Content-Type header (browser sets it with boundary)
+async function apiUpload(path, formData){
+  const headers = {};
+  if(state.token) headers['Authorization'] = 'Bearer ' + state.token;
+  const res = await fetch(API_BASE + path, { method: 'POST', headers, body: formData });
+  const data = await res.json();
+  if(!res.ok) throw new Error(data.message || 'Something went wrong');
+  return data;
+}
+
 function showToast(msg, isError=false){
   const t = document.getElementById('toast');
   document.getElementById('toast-msg').textContent = msg;
@@ -320,6 +330,7 @@ function renderTournamentsPage(){
               <td><span class="badge ${t.status.toLowerCase()}">${t.status}</span></td>
               <td>
                 <div style="display:flex; gap:6px;">
+                  <button class="btn btn-secondary btn-sm" data-action="banner" data-id="${t._id}"><i class="fa-solid fa-image"></i></button>
                   <button class="btn btn-secondary btn-sm" data-action="room" data-id="${t._id}"><i class="fa-solid fa-key"></i></button>
                   <button class="btn btn-secondary btn-sm" data-action="players" data-id="${t._id}"><i class="fa-solid fa-users"></i></button>
                   <button class="btn btn-danger btn-sm" data-action="delete" data-id="${t._id}"><i class="fa-solid fa-trash"></i></button>
@@ -453,19 +464,48 @@ function renderModal(){
             <div class="field"><label>Title</label><input type="text" id="title" placeholder="e.g. Friday Night Squad Showdown"></div>
             <div class="field-row">
               <div class="field"><label>Game</label><select id="game"><option>Free Fire</option><option>PUBG</option></select></div>
-              <div class="field"><label>Match Type</label><select id="matchType"><option>Solo</option><option>Duo</option><option selected>Squad</option></select></div>
+              <div class="field"><label>Match Type</label>
+                <select id="matchType">
+                  <option>Solo</option>
+                  <option>Duo</option>
+                  <option selected>Squad</option>
+                  <option>Classic Squad</option>
+                  <option>Lone Wolf</option>
+                  <option>1v1</option>
+                </select>
+              </div>
             </div>
             <div class="field-row">
               <div class="field"><label>Mode</label><select id="mode"><option>Free</option><option>Paid</option></select></div>
               <div class="field"><label>Entry Fee (₨)</label><input type="number" id="entryFee" value="0" min="0"></div>
             </div>
             <div class="field-row">
-              <div class="field"><label>Prize Pool (₨)</label><input type="number" id="prizePool" value="0" min="0"></div>
-              <div class="field"><label>Max Slots</label><input type="number" id="maxSlots" value="48" min="1"></div>
+              <div class="field"><label>Prize Pool (₨) <span style="color:var(--text-low); text-transform:none; font-weight:600;">— position prize</span></label><input type="number" id="prizePool" value="0" min="0"></div>
+              <div class="field"><label>Per Kill Reward (₨) <span style="color:var(--text-low); text-transform:none; font-weight:600;">— optional</span></label><input type="number" id="perKillReward" value="0" min="0"></div>
             </div>
+            <div class="field"><label>Max Slots</label><input type="number" id="maxSlots" value="48" min="1"></div>
             <div class="field"><label>Match Date & Time</label><input type="datetime-local" id="matchDate" value="${fmtDateInput()}"></div>
             <div class="field"><label>Description (optional)</label><textarea id="description" rows="2" placeholder="Rules, notes, etc."></textarea></div>
             <button class="btn btn-primary" id="saveTournamentBtn" style="width:100%; justify-content:center; margin-top:6px;"><i class="fa-solid fa-check"></i> Create Tournament</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  if(state.modal === 'banner'){
+    const t = state.activeTournament;
+    return `
+      <div class="modal-overlay show">
+        <div class="modal">
+          <div class="modal-head"><h3><i class="fa-solid fa-image"></i> Tournament Banner</h3><button class="modal-close" id="closeModal">✕</button></div>
+          <div class="modal-body">
+            <p style="color:var(--text-mid); font-size:13px; margin-bottom:14px;">Add a banner image for "${t?.title}". This appears on the tournament card in the player app. You can skip this and add it later.</p>
+            ${t?.bannerImage ? `<img src="${t.bannerImage}" style="width:100%; border-radius:10px; margin-bottom:14px; max-height:160px; object-fit:cover;">` : ''}
+            <div class="field"><label>Choose Image</label><input type="file" id="bannerFile" accept="image/*"></div>
+            <div class="error-msg" id="err"></div>
+            <button class="btn btn-primary" id="uploadBannerBtn" style="width:100%; justify-content:center; margin-top:6px;"><i class="fa-solid fa-upload"></i> Upload Banner</button>
+            <button class="btn btn-secondary" id="skipBannerBtn" style="width:100%; justify-content:center; margin-top:8px;">Skip for now</button>
           </div>
         </div>
       </div>
@@ -506,8 +546,9 @@ function renderModal(){
           <div class="modal-head"><h3><i class="fa-solid fa-users"></i> ${t ? t.title : ''} — Players</h3><button class="modal-close" id="closeModal">✕</button></div>
           <div class="modal-body">
             ${state.registrations.length === 0 ? '<p style="color:var(--text-low); text-align:center; padding:30px 0;">No players registered yet.</p>' : `
+            ${t?.perKillReward > 0 ? `<p style="font-size:12px; color:var(--gold); margin-bottom:10px;"><i class="fa-solid fa-circle-info"></i> Per-kill reward: ₨${t.perKillReward}/kill. Total prize = kills × ₨${t.perKillReward} + bonus.</p>` : ''}
             <table>
-              <thead><tr><th>Player</th><th>Payment</th><th>Kills</th><th>Rank</th><th>Points</th><th>Prize</th><th></th></tr></thead>
+              <thead><tr><th>Player</th><th>Payment</th><th>Screenshot</th><th>Kills</th><th>Rank</th><th>Points</th><th>${t?.perKillReward > 0 ? 'Bonus' : 'Prize'}</th><th></th></tr></thead>
               <tbody>
                 ${state.registrations.map(r => `
                   <tr data-reg-id="${r._id}">
@@ -526,11 +567,25 @@ function renderModal(){
                         ` : ''}
                       `}
                     </td>
+                    <td>
+                      ${r.resultScreenshot ? `
+                        <a href="${r.resultScreenshot}" target="_blank"><img src="${r.resultScreenshot}" style="width:48px; height:48px; object-fit:cover; border-radius:7px; border:1px solid var(--line);"></a>
+                        ${r.screenshotStatus === 'Pending Review' ? `
+                          <div style="margin-top:5px; display:flex; gap:4px;">
+                            <button class="btn btn-success btn-sm" data-ssaction="Verified" data-regid="${r._id}">✓</button>
+                            <button class="btn btn-danger btn-sm" data-ssaction="Rejected" data-regid="${r._id}">✕</button>
+                          </div>
+                        ` : `<div style="font-size:10px; margin-top:3px;"><span class="badge ${r.screenshotStatus==='Verified'?'verified':'rejected'}">${r.screenshotStatus}</span></div>`}
+                      ` : `<span style="font-size:11px; color:var(--text-low);">—</span>`}
+                    </td>
                     <td><input type="number" class="result-input" data-field="kills" data-regid="${r._id}" value="${r.kills||0}" style="width:55px; background:var(--bg-card); border:1px solid var(--line); border-radius:6px; color:var(--text-hi); padding:5px 7px; font-size:12.5px;"></td>
                     <td><input type="number" class="result-input" data-field="rank" data-regid="${r._id}" value="${r.rank||0}" style="width:55px; background:var(--bg-card); border:1px solid var(--line); border-radius:6px; color:var(--text-hi); padding:5px 7px; font-size:12.5px;"></td>
                     <td><input type="number" class="result-input" data-field="points" data-regid="${r._id}" value="${r.points||0}" style="width:55px; background:var(--bg-card); border:1px solid var(--line); border-radius:6px; color:var(--text-hi); padding:5px 7px; font-size:12.5px;"></td>
-                    <td><input type="number" class="result-input" data-field="prizeWon" data-regid="${r._id}" value="${r.prizeWon||0}" style="width:65px; background:var(--bg-card); border:1px solid var(--line); border-radius:6px; color:var(--text-hi); padding:5px 7px; font-size:12.5px;"></td>
-                    <td><button class="btn btn-primary btn-sm" data-action="saveResult" data-regid="${r._id}"><i class="fa-solid fa-save"></i></button></td>
+                    <td><input type="number" class="result-input" data-field="bonusPrize" data-regid="${r._id}" value="${t?.perKillReward > 0 ? '' : (r.prizeWon||0)}" placeholder="${t?.perKillReward > 0 ? '0' : ''}" style="width:65px; background:var(--bg-card); border:1px solid var(--line); border-radius:6px; color:var(--text-hi); padding:5px 7px; font-size:12.5px;"></td>
+                    <td>
+                      <button class="btn btn-primary btn-sm" data-action="saveResult" data-regid="${r._id}"><i class="fa-solid fa-save"></i></button>
+                      ${t?.perKillReward > 0 ? `<div style="font-size:10px; color:var(--gold); margin-top:3px;">Total: ₨${r.prizeWon||0}</div>` : ''}
+                    </td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -631,6 +686,30 @@ function attachEvents(){
   const closeModal = document.getElementById('closeModal');
   if(closeModal) closeModal.onclick = () => { state.modal = null; state.activeTournament = null; render(); };
 
+  // Banner upload
+  const uploadBannerBtn = document.getElementById('uploadBannerBtn');
+  if(uploadBannerBtn) uploadBannerBtn.onclick = async () => {
+    const fileInput = document.getElementById('bannerFile');
+    const err = document.getElementById('err');
+    if(!fileInput.files[0]){ err.textContent = 'Please choose an image first'; err.style.display='block'; return; }
+    uploadBannerBtn.disabled = true;
+    uploadBannerBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
+    try{
+      const formData = new FormData();
+      formData.append('banner', fileInput.files[0]);
+      await apiUpload('/tournaments/' + state.activeTournament._id + '/banner', formData);
+      showToast('Banner uploaded! 🖼️');
+      state.modal = null; state.activeTournament = null;
+      await loadTournaments();
+    }catch(e){
+      err.textContent = e.message; err.style.display='block';
+      uploadBannerBtn.disabled = false; uploadBannerBtn.innerHTML = '<i class="fa-solid fa-upload"></i> Upload Banner';
+    }
+  };
+
+  const skipBannerBtn = document.getElementById('skipBannerBtn');
+  if(skipBannerBtn) skipBannerBtn.onclick = () => { state.modal = null; state.activeTournament = null; render(); };
+
   const saveTournamentBtn = document.getElementById('saveTournamentBtn');
   if(saveTournamentBtn) saveTournamentBtn.onclick = async () => {
     const err = document.getElementById('err');
@@ -641,20 +720,30 @@ function attachEvents(){
       mode: document.getElementById('mode').value,
       entryFee: Number(document.getElementById('entryFee').value),
       prizePool: Number(document.getElementById('prizePool').value),
+      perKillReward: Number(document.getElementById('perKillReward').value),
       maxSlots: Number(document.getElementById('maxSlots').value),
       matchDate: document.getElementById('matchDate').value,
       description: document.getElementById('description').value,
     };
     if(!payload.title){ err.textContent='Title is required'; err.style.display='block'; return; }
     try{
-      await api('/tournaments', 'POST', payload);
+      const newTournament = await api('/tournaments', 'POST', payload);
       showToast('Tournament created! 🏆');
-      state.modal = null;
+      state.modal = 'banner';
+      state.activeTournament = newTournament;
       await loadTournaments();
+      render();
     }catch(e){ err.textContent = e.message; err.style.display='block'; }
   };
 
   // Table row actions
+  app.querySelectorAll('[data-action="banner"]').forEach(btn => {
+    btn.onclick = () => {
+      state.activeTournament = state.tournaments.find(t => t._id === btn.dataset.id);
+      state.modal = 'banner'; render();
+    };
+  });
+
   app.querySelectorAll('[data-action="room"]').forEach(btn => {
     btn.onclick = () => {
       state.activeTournament = state.tournaments.find(t => t._id === btn.dataset.id);
@@ -717,11 +806,24 @@ function attachEvents(){
       const kills = Number(row.querySelector('[data-field="kills"]').value);
       const rank = Number(row.querySelector('[data-field="rank"]').value);
       const points = Number(row.querySelector('[data-field="points"]').value);
-      const prizeWon = Number(row.querySelector('[data-field="prizeWon"]').value);
+      const bonusPrize = Number(row.querySelector('[data-field="bonusPrize"]').value) || 0;
       try{
-        await api('/registrations/' + regId + '/result', 'PUT', { kills, rank, points, prizeWon, prizeStatus: prizeWon > 0 ? 'Pending' : 'Pending' });
+        await api('/registrations/' + regId + '/result', 'PUT', { kills, rank, points, bonusPrize });
         showToast('Result saved! 📊');
         await loadRegistrations(state.activeTournament._id);
+        render();
+      }catch(e){ showToast(e.message, true); }
+    };
+  });
+
+  // Screenshot verify/reject
+  app.querySelectorAll('[data-ssaction]').forEach(btn => {
+    btn.onclick = async () => {
+      try{
+        await api('/registrations/' + btn.dataset.regid + '/screenshot-status', 'PUT', { screenshotStatus: btn.dataset.ssaction });
+        showToast('Screenshot ' + btn.dataset.ssaction.toLowerCase());
+        await loadRegistrations(state.activeTournament._id);
+        render();
       }catch(e){ showToast(e.message, true); }
     };
   });

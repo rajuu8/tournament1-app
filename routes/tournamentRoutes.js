@@ -1,8 +1,12 @@
 const express = require('express');
+const multer = require('multer');
 const Tournament = require('../models/Tournament');
 const Registration = require('../models/Registration');
 const { protect, adminOnly } = require('../middleware/authMiddleware');
 const { sendPushToMany } = require('../config/firebase');
+const { uploadImage } = require('../config/cloudinary');
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 const router = express.Router();
 
@@ -81,6 +85,24 @@ router.delete('/:id', protect, adminOnly, async (req, res) => {
     const tournament = await Tournament.findByIdAndDelete(req.params.id);
     if (!tournament) return res.status(404).json({ message: 'Tournament not found' });
     res.json({ message: 'Tournament deleted' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// @route   POST /api/tournaments/:id/banner
+// @desc    Admin uploads/replaces a tournament's banner image
+router.post('/:id/banner', protect, adminOnly, upload.single('banner'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'No image file provided' });
+    const url = await uploadImage(req.file.buffer, 'clashking-banners');
+    const tournament = await Tournament.findByIdAndUpdate(
+      req.params.id,
+      { bannerImage: url },
+      { new: true }
+    );
+    if (!tournament) return res.status(404).json({ message: 'Tournament not found' });
+    res.json(tournament);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }

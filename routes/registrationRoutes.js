@@ -1,9 +1,13 @@
 const express = require('express');
+const multer = require('multer');
 const Registration = require('../models/Registration');
 const Tournament = require('../models/Tournament');
 const User = require('../models/User');
 const { protect, adminOnly } = require('../middleware/authMiddleware');
 const { sendPushNotification } = require('../config/firebase');
+const { uploadImage } = require('../config/cloudinary');
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 const router = express.Router();
 
@@ -109,19 +113,28 @@ router.get('/my', protect, async (req, res) => {
 
 // @route   PUT /api/registrations/:id/result
 // @desc    Admin updates kills/rank/points/prize for a registration. Prize auto-credits to wallet once.
+//          If the tournament has a perKillReward set, prize = (kills x perKillReward) + any manual bonus entered.
 router.put('/:id/result', protect, adminOnly, async (req, res) => {
   try {
-    const { kills, rank, points, prizeWon } = req.body;
+    const { kills, rank, points, prizeWon, bonusPrize } = req.body;
     const before = await Registration.findById(req.params.id);
     if (!before) return res.status(404).json({ message: 'Registration not found' });
 
-    const newPrize = Number(prizeWon) || 0;
+    const tournament = await Tournament.findById(before.tournament);
+    const killCount = Number(kills) || 0;
+    const perKillEarnings = tournament?.perKillReward ? killCount * tournament.perKillReward : 0;
+    const manualBonus = Number(bonusPrize ?? prizeWon) || 0;
+
+    // If perKillReward is set, total prize = per-kill earnings + manual bonus (position prize).
+    // Otherwise, fall back to whatever the admin typed directly into prizeWon.
+    const newPrize = tournament?.perKillReward ? perKillEarnings + manualBonus : manualBonus;
+
     const alreadyPaid = before.prizeStatus === 'Paid';
 
     const registration = await Registration.findByIdAndUpdate(
       req.params.id,
       {
-        kills, rank, points,
+        kills: killCount, rank, points,
         prizeWon: newPrize,
         prizeStatus: newPrize > 0 ? 'Paid' : 'Pending',
       },
@@ -141,6 +154,45 @@ router.put('/:id/result', protect, adminOnly, async (req, res) => {
       await User.findByIdAndUpdate(registration.user, { $inc: { walletBalance: diff } });
     }
 
+    res.json(registration);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// @route   POST /api/registrations/:id/screenshot
+// @desc    Player uploads a match result screenshot (e.g. scoreboard proof for kills/wins)
+router.post('/:id/screenshot', protect, upload.single('screenshot'), async (req, res) => {
+  try {
+    const registration = await Registration.findById(req.params.id);
+    if (!registration) return res.status(404).json({ message: 'Registration not found' });
+    if (registration.user.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Not your registration' });
+    }
+    if (!req.file) return res.status(400).json({ message: 'No screenshot file provided' });
+
+    const url = await uploadImage(req.file.buffer);
+    registration.resultScreenshot = url;
+    registration.screenshotStatus = 'Pending Review';
+    await registration.save();
+
+    res.json(registration);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// @route   PUT /api/registrations/:id/screenshot-status
+// @desc    Admin marks a screenshot as Verified or Rejected after reviewing it
+router.put('/:id/screenshot-status', protect, adminOnly, async (req, res) => {
+  try {
+    const { screenshotStatus } = req.body; // 'Verified' or 'Rejected'
+    const registration = await Registration.findByIdAndUpdate(
+      req.params.id,
+      { screenshotStatus },
+      { new: true }
+    );
+    if (!registration) return res.status(404).json({ message: 'Registration not found' });
     res.json(registration);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });

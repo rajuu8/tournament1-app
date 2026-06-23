@@ -15,8 +15,15 @@ const registrationSchema = new mongoose.Schema(
     kills: { type: Number, default: 0 },
     rank: { type: Number, default: 0 },
     points: { type: Number, default: 0 },
-    prizeWon: { type: Number, default: 0 },
+    prizeWon: { type: Number, default: 0 }, // total prize (position prize + per-kill earnings), set by admin
     prizeStatus: { type: String, enum: ['Pending', 'Paid'], default: 'Pending' },
+
+    resultScreenshot: { type: String, default: '' }, // Cloudinary URL of the match result screenshot
+    screenshotStatus: {
+      type: String,
+      enum: ['Not Submitted', 'Pending Review', 'Verified', 'Rejected'],
+      default: 'Not Submitted',
+    },
   },
   { timestamps: true }
 );
