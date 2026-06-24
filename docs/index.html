@@ -122,6 +122,10 @@
   }
   .t-tag.free{ background: var(--cyan-dim); color: var(--cyan); }
   .t-tag.paid{ background: #ffc23c22; color: var(--gold); }
+  .t-tag.urgent{ background: #ff3b5c22; color: var(--danger); margin-left:6px; animation: urgentPulse 1.4s ease-in-out infinite; }
+  @keyframes urgentPulse{ 0%,100%{ opacity:1; } 50%{ opacity:0.55; } }
+  .slot-fill.urgent{ background: linear-gradient(90deg, var(--danger), #ff7a3c) !important; }
+  .slot-text.urgent-text{ color: var(--danger) !important; font-weight:800; }
   .badge{ display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; text-transform:uppercase; }
   .badge.verified{ background:#3ddc8422; color:var(--success); }
   .badge.rejected{ background:#ff3b5c22; color:var(--danger); }
@@ -377,6 +381,8 @@ let state = {
   myRegs: [],
   myTxns: [],
   globalLeaderboard: [],
+  referralLeaderboard: [],
+  leaderboardTab: 'earners',
   esewaNumber: '',
   walletModal: null, // null | 'deposit' | 'withdraw'
   loading: false,
@@ -606,6 +612,8 @@ function renderCard(t){
   const isFull = t.filledSlots >= t.maxSlots;
   const pct = Math.min(100, Math.round((t.filledSlots / t.maxSlots) * 100));
   const isLive = t.status === 'Live';
+  const isUrgent = !isFull && pct >= 80;
+  const slotsLeft = t.maxSlots - t.filledSlots;
   const alreadyJoined = state.myRegs.some(r => r.tournament && (r.tournament._id === t._id));
   return `
     <div class="t-card ${isLive?'live':''}" data-id="${t._id}">
@@ -615,6 +623,7 @@ function renderCard(t){
           <span class="t-tag ${isLive ? 'live' : (t.mode==='Free'?'free':'paid')}">
             ${isLive ? '<i class="fa-solid fa-circle"></i> LIVE' : (t.mode === 'Free' ? 'FREE ENTRY' : 'PAID')}
           </span>
+          ${isUrgent ? `<span class="t-tag urgent"><i class="fa-solid fa-fire"></i> ${slotsLeft} SLOT${slotsLeft!==1?'S':''} LEFT</span>` : ''}
           <div class="t-title">${t.title}</div>
           <div class="t-meta">
             <span><i class="fa-solid fa-users"></i> ${t.matchType}</span>
@@ -628,8 +637,8 @@ function renderCard(t){
         </div>
       </div>
       <div class="t-card-bottom">
-        <div class="slot-bar"><div class="slot-fill" style="width:${pct}%"></div></div>
-        <div class="slot-text">${t.filledSlots}/${t.maxSlots}</div>
+        <div class="slot-bar"><div class="slot-fill ${isUrgent?'urgent':''}" style="width:${pct}%"></div></div>
+        <div class="slot-text ${isUrgent?'urgent-text':''}">${t.filledSlots}/${t.maxSlots}</div>
         <button class="join-btn ${isFull && !alreadyJoined ? 'full' : ''} ${alreadyJoined ? 'joined' : ''}">
           ${alreadyJoined ? 'Joined ✓' : (isFull ? 'Full' : (t.mode === 'Free' ? 'Join Free' : '₨'+t.entryFee))}
         </button>
@@ -882,46 +891,73 @@ function initials(name){
 }
 
 function renderLeaderboard(){
+  const tab = state.leaderboardTab || 'earners';
   const top3 = state.globalLeaderboard.slice(0,3);
   const rest = state.globalLeaderboard.slice(3);
 
   return `
-    <div class="topbar"><div class="brand"><div class="brand-name">🏆 TOP EARNERS</div></div></div>
+    <div class="topbar"><div class="brand"><div class="brand-name">🏆 RANKINGS</div></div></div>
+
+    <div class="wallet-tabs" style="padding: 0 16px 14px;">
+      <button class="wallet-tab ${tab==='earners'?'active':''}" data-lbtab="earners">Top Earners</button>
+      <button class="wallet-tab ${tab==='recruiters'?'active':''}" data-lbtab="recruiters">Top Recruiters</button>
+    </div>
 
     ${state.loading ? '<div class="loader"><i class="fa-solid fa-spinner"></i></div>' : ''}
-    ${!state.loading && state.globalLeaderboard.length === 0 ? `
-      <div class="empty-state"><i class="fa-solid fa-ranking-star"></i>No winners yet. Be the first champion!</div>
-    ` : ''}
 
-    ${top3.length > 0 ? `
-      <div class="glb-podium">
-        ${top3.map((p, i) => `
-          <div class="glb-podium-card rank${i+1}">
-            ${i===0 ? '<div class="glb-crown">👑</div>' : ''}
-            <div class="glb-avatar">${initials(p.name)}</div>
-            <div class="glb-podium-name">${p.name}</div>
-            <div class="glb-podium-amt">₨${p.totalEarnings}</div>
+    ${tab === 'earners' ? `
+      ${!state.loading && state.globalLeaderboard.length === 0 ? `
+        <div class="empty-state"><i class="fa-solid fa-ranking-star"></i>No winners yet. Be the first champion!</div>
+      ` : ''}
+      ${top3.length > 0 ? `
+        <div class="glb-podium">
+          ${top3.map((p, i) => `
+            <div class="glb-podium-card rank${i+1}">
+              ${i===0 ? '<div class="glb-crown">👑</div>' : ''}
+              <div class="glb-avatar">${initials(p.name)}</div>
+              <div class="glb-podium-name">${p.name}</div>
+              <div class="glb-podium-amt">₨${p.totalEarnings}</div>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+      <div class="t-list" style="padding-top:0;">
+        ${rest.map((p, i) => `
+          <div class="glb-row">
+            <div class="glb-rank-num">#${i+4}</div>
+            <div class="glb-avatar" style="width:36px;height:36px;font-size:13px;">${initials(p.name)}</div>
+            <div class="glb-info">
+              <div class="gname">${p.name}</div>
+              <div class="gsub">${p.wins} win${p.wins!==1?'s':''} · ${p.tournamentsPlayed} matches</div>
+            </div>
+            <div class="glb-earnings">
+              <div class="ge-amt">₨${p.totalEarnings}</div>
+              <div class="ge-lbl">Earned</div>
+            </div>
           </div>
         `).join('')}
       </div>
-    ` : ''}
-
-    <div class="t-list" style="padding-top:0;">
-      ${rest.map((p, i) => `
-        <div class="glb-row">
-          <div class="glb-rank-num">#${i+4}</div>
-          <div class="glb-avatar" style="width:36px;height:36px;font-size:13px;">${initials(p.name)}</div>
-          <div class="glb-info">
-            <div class="gname">${p.name}</div>
-            <div class="gsub">${p.wins} win${p.wins!==1?'s':''} · ${p.tournamentsPlayed} matches</div>
+    ` : `
+      ${!state.loading && state.referralLeaderboard.length === 0 ? `
+        <div class="empty-state"><i class="fa-solid fa-user-group"></i>No referrals yet. Invite friends to top this list!</div>
+      ` : ''}
+      <div class="t-list" style="padding-top:0;">
+        ${state.referralLeaderboard.map((p, i) => `
+          <div class="glb-row">
+            <div class="glb-rank-num">${i===0?'👑':'#'+(i+1)}</div>
+            <div class="glb-avatar" style="width:36px;height:36px;font-size:13px;">${initials(p.name)}</div>
+            <div class="glb-info">
+              <div class="gname">${p.name}</div>
+              <div class="gsub">Invited ${p.referralCount} friend${p.referralCount!==1?'s':''}</div>
+            </div>
+            <div class="glb-earnings">
+              <div class="ge-amt" style="color:var(--cyan);">${p.referralCount}</div>
+              <div class="ge-lbl">Recruits</div>
+            </div>
           </div>
-          <div class="glb-earnings">
-            <div class="ge-amt">₨${p.totalEarnings}</div>
-            <div class="ge-lbl">Earned</div>
-          </div>
-        </div>
-      `).join('')}
-    </div>
+        `).join('')}
+      </div>
+    `}
   `;
 }
 
@@ -970,6 +1006,14 @@ async function loadGlobalLeaderboard(){
   state.loading = true; render();
   try{
     state.globalLeaderboard = await api('/registrations/leaderboard/global', 'GET', null, false);
+  }catch(e){ /* silent */ }
+  state.loading = false; render();
+}
+
+async function loadReferralLeaderboard(){
+  state.loading = true; render();
+  try{
+    state.referralLeaderboard = await api('/registrations/leaderboard/referrals', 'GET', null, false);
   }catch(e){ /* silent */ }
   state.loading = false; render();
 }
@@ -1055,6 +1099,18 @@ function attachEvents(){
   // Retry button on network error
   const retryLoadBtn = document.getElementById('retryLoadBtn');
   if(retryLoadBtn) retryLoadBtn.onclick = () => loadTournaments();
+
+  // Leaderboard tab switch
+  app.querySelectorAll('[data-lbtab]').forEach(btn => {
+    btn.onclick = async () => {
+      state.leaderboardTab = btn.dataset.lbtab;
+      if(btn.dataset.lbtab === 'recruiters' && state.referralLeaderboard.length === 0){
+        await loadReferralLeaderboard();
+      } else {
+        render();
+      }
+    };
+  });
 
   app.querySelectorAll('.game-tab').forEach(btn => {
     btn.onclick = () => { state.game = btn.dataset.game; render(); };

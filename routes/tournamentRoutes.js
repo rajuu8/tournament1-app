@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const Tournament = require('../models/Tournament');
 const Registration = require('../models/Registration');
+const User = require('../models/User');
 const { protect, adminOnly } = require('../middleware/authMiddleware');
 const { sendPushToMany } = require('../config/firebase');
 const { uploadImage } = require('../config/cloudinary');
@@ -38,10 +39,21 @@ router.get('/:id', async (req, res) => {
 });
 
 // @route   POST /api/tournaments
-// @desc    Create a new tournament (admin only)
+// @desc    Create a new tournament (admin only) - notifies all players
 router.post('/', protect, adminOnly, async (req, res) => {
   try {
     const tournament = await Tournament.create(req.body);
+
+    // Notify all players (not admins) that a new tournament is live
+    const players = await User.find({ role: 'player', fcmToken: { $ne: '' } }).select('fcmToken');
+    const tokens = players.map(p => p.fcmToken).filter(Boolean);
+    sendPushToMany(
+      tokens,
+      '🔥 New Tournament Alert!',
+      `${tournament.title} (${tournament.game}) - ₨${tournament.prizePool} prize pool! Slots filling fast.`,
+      { tournamentId: tournament._id.toString(), type: 'new_tournament' }
+    );
+
     res.status(201).json(tournament);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });

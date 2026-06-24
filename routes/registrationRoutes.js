@@ -257,4 +257,54 @@ router.get('/leaderboard/global', async (req, res) => {
   }
 });
 
+// @route   GET /api/registrations/cron/inactivity-reminder
+// @desc    Sends a reminder push notification to players who haven't logged in for 2+ days.
+//          Designed to be triggered once daily by a free external cron service (e.g. cron-job.org).
+//          Protected by a simple secret query param so randoms can't spam-trigger it.
+router.get('/cron/inactivity-reminder', async (req, res) => {
+  try {
+    if (req.query.key !== process.env.CRON_SECRET) {
+      return res.status(403).json({ message: 'Invalid cron key' });
+    }
+
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const inactiveUsers = await User.find({
+      role: 'player',
+      fcmToken: { $ne: '' },
+      lastLoginDate: { $lt: twoDaysAgo },
+    }).select('fcmToken loginStreak');
+
+    let sent = 0;
+    for (const user of inactiveUsers) {
+      sendPushNotification(
+        user.fcmToken,
+        '🔥 Don\'t lose your streak!',
+        user.loginStreak > 1
+          ? `You're on a ${user.loginStreak}-day streak. Login now before it resets!`
+          : 'New tournaments are live! Come check them out.',
+        { type: 'inactivity_reminder' }
+      );
+      sent++;
+    }
+
+    res.json({ message: `Reminder sent to ${sent} inactive players` });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// @route   GET /api/registrations/leaderboard/referrals
+// @desc    Public - top referrers leaderboard (most successful friend invites)
+router.get('/leaderboard/referrals', async (req, res) => {
+  try {
+    const topReferrers = await User.find({ referralCount: { $gt: 0 } })
+      .select('name referralCount')
+      .sort({ referralCount: -1 })
+      .limit(20);
+    res.json(topReferrers);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 module.exports = router;
