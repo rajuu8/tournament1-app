@@ -9,6 +9,7 @@ const authRoutes = require('./routes/authRoutes');
 const tournamentRoutes = require('./routes/tournamentRoutes');
 const registrationRoutes = require('./routes/registrationRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
+const supportRoutes = require('./routes/supportRoutes');
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/tournaments', tournamentRoutes);
 app.use('/api/registrations', registrationRoutes);
 app.use('/api/transactions', transactionRoutes);
+app.use('/api/support', supportRoutes);
 
 // Health check route
 app.get('/', (req, res) => {

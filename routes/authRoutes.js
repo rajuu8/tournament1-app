@@ -2,7 +2,8 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { protect } = require('../middleware/authMiddleware');
+const Registration = require('../models/Registration');
+const { protect, adminOnly } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
@@ -171,12 +172,12 @@ router.post('/admin/register', async (req, res) => {
 });
 
 // @route   POST /api/auth/admin/login
-// @desc    Login for admin
+// @desc    Login for admin or support-admin
 router.post('/admin/login', async (req, res) => {
   try {
     const { phone, password } = req.body;
 
-    const user = await User.findOne({ phone, role: 'admin' });
+    const user = await User.findOne({ phone, role: { $in: ['admin', 'support-admin'] } });
     if (!user) {
       return res.status(400).json({ message: 'Invalid admin credentials' });
     }
@@ -214,6 +215,81 @@ router.put('/fcm-token', protect, async (req, res) => {
     const { fcmToken } = req.body;
     await User.findByIdAndUpdate(req.user.id, { fcmToken });
     res.json({ message: 'Token saved' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// @route   POST /api/auth/admin/create-support-admin
+// @desc    Main admin creates a limited-permission support-admin (chat access only)
+router.post('/admin/create-support-admin', protect, adminOnly, async (req, res) => {
+  try {
+    const { name, phone, password } = req.body;
+    if (!name || !phone || !password) {
+      return res.status(400).json({ message: 'Name, phone and password are required' });
+    }
+
+    const existingUser = await User.findOne({ phone });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Phone number already registered' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const supportAdmin = await User.create({
+      name,
+      phone,
+      password: hashedPassword,
+      role: 'support-admin',
+    });
+
+    res.status(201).json({
+      user: { id: supportAdmin._id, name: supportAdmin.name, phone: supportAdmin.phone, role: supportAdmin.role },
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// @route   GET /api/auth/admin/support-admins
+// @desc    Main admin lists all support-admins they've created
+router.get('/admin/support-admins', protect, adminOnly, async (req, res) => {
+  try {
+    const supportAdmins = await User.find({ role: 'support-admin' }).select('name phone createdAt');
+    res.json(supportAdmins);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// @route   DELETE /api/auth/admin/support-admins/:id
+// @desc    Main admin removes a support-admin's access
+router.delete('/admin/support-admins/:id', protect, adminOnly, async (req, res) => {
+  try {
+    const deleted = await User.findOneAndDelete({ _id: req.params.id, role: 'support-admin' });
+    if (!deleted) return res.status(404).json({ message: 'Support admin not found' });
+    res.json({ message: 'Support admin removed' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// @route   GET /api/auth/my-stats
+// @desc    Player's own lifetime stats - total kills, wins, matches, earnings
+router.get('/my-stats', protect, async (req, res) => {
+  try {
+    const stats = await Registration.aggregate([
+      { $match: { user: new (require('mongoose').Types.ObjectId)(req.user.id) } },
+      {
+        $group: {
+          _id: null,
+          totalMatches: { $sum: 1 },
+          totalKills: { $sum: '$kills' },
+          totalWins: { $sum: { $cond: [{ $eq: ['$rank', 1] }, 1, 0] } },
+          totalEarnings: { $sum: '$prizeWon' },
+        },
+      },
+    ]);
+    res.json(stats[0] || { totalMatches: 0, totalKills: 0, totalWins: 0, totalEarnings: 0 });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }

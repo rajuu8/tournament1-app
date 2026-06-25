@@ -335,6 +335,39 @@
   .txn-status.approved{ color: var(--success); }
   .txn-status.rejected{ color: var(--danger); }
 
+  .stat-grid-mini{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; padding: 0 16px 14px; margin: 0 -16px; }
+  .stat-mini{ background:var(--bg-card); border:1px solid var(--line); border-radius:12px; padding:12px 6px; text-align:center; }
+  .sm-val{ font-family:'Saira Condensed'; font-weight:800; font-size:18px; }
+  .sm-lbl{ font-size:9.5px; color:var(--text-low); text-transform:uppercase; font-weight:600; margin-top:2px; }
+
+  /* ---------- Support Chat ---------- */
+  .chat-wrap{ display:flex; flex-direction:column; height: calc(100vh - 60px); }
+  .chat-messages{ flex:1; overflow-y:auto; padding: 12px 16px; display:flex; flex-direction:column; gap:10px; }
+  .chat-bubble{ max-width:78%; padding:10px 13px; border-radius:14px; font-size:13.5px; line-height:1.4; word-wrap:break-word; }
+  .chat-bubble.mine{ align-self:flex-end; background: linear-gradient(135deg, var(--flame), #ffd97a); color:#1a1200; border-bottom-right-radius:4px; }
+  .chat-bubble.theirs{ align-self:flex-start; background: var(--bg-card); border:1px solid var(--line); border-bottom-left-radius:4px; }
+  .chat-bubble img{ max-width:100%; border-radius:8px; margin-top:6px; display:block; }
+  .chat-time{ font-size:9.5px; opacity:0.6; margin-top:4px; }
+  .chat-input-bar{ display:flex; gap:8px; padding: 10px 16px; border-top:1px solid var(--line); background:var(--bg-panel); align-items:flex-end; }
+  .chat-input-bar textarea{ flex:1; background:var(--bg-card); border:1px solid var(--line); border-radius:14px; padding:10px 14px; color:var(--text-hi); font-family:'Rajdhani'; font-size:14px; resize:none; max-height:90px; }
+  .chat-attach-btn{ width:42px; height:42px; border-radius:50%; background:var(--bg-card); border:1px solid var(--line); color:var(--text-mid); flex-shrink:0; }
+  .chat-send-btn{ width:42px; height:42px; border-radius:50%; background:var(--flame); border:none; color:#fff; flex-shrink:0; }
+  .chat-preview-bar{ padding: 8px 16px; display:flex; align-items:center; gap:8px; background:var(--bg-panel); border-top:1px solid var(--line); }
+  .chat-preview-bar img{ width:44px; height:44px; border-radius:8px; object-fit:cover; }
+
+  /* FAQ Accordion */
+  .faq-item{ background:var(--bg-card); border:1px solid var(--line); border-radius:12px; margin-bottom:8px; overflow:hidden; }
+  .faq-q{ padding:14px; font-weight:700; font-size:13.5px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
+  .faq-a{ padding:0 14px 14px; font-size:12.5px; color:var(--text-mid); line-height:1.5; display:none; }
+  .faq-item.open .faq-a{ display:block; }
+  .faq-item.open .faq-chevron{ transform:rotate(180deg); }
+
+  /* Join Rules Modal */
+  .rules-list{ display:flex; flex-direction:column; gap:10px; margin: 14px 0; }
+  .rule-row{ display:flex; gap:10px; align-items:flex-start; }
+  .rule-row i{ color:var(--gold); margin-top:2px; flex-shrink:0; }
+  .rule-row span{ font-size:13px; color:var(--text-mid); line-height:1.4; }
+
   /* ---------- Global Leaderboard ---------- */
   .glb-podium{ display:flex; align-items:flex-end; gap:8px; padding: 8px 16px 20px; }
   .glb-podium-card{ flex:1; background:var(--bg-card); border:1px solid var(--line); border-radius:14px; padding:14px 10px; text-align:center; position:relative; }
@@ -383,6 +416,12 @@ let state = {
   globalLeaderboard: [],
   referralLeaderboard: [],
   leaderboardTab: 'earners',
+  myStats: {},
+  supportMessages: [],
+  showSupportChat: false,
+  showFaq: false,
+  showRulesModal: false,
+  pendingChatImage: null, // File object selected but not yet sent
   esewaNumber: '',
   walletModal: null, // null | 'deposit' | 'withdraw'
   loading: false,
@@ -484,6 +523,10 @@ function render(){
   const app = document.getElementById('app');
   if(!state.token){
     app.innerHTML = state.screen === 'signup' ? renderSignup() : renderLogin();
+  } else if(state.showSupportChat){
+    app.innerHTML = renderSupportChat();
+  } else if(state.showFaq){
+    app.innerHTML = renderFaq();
   } else {
     let body = '';
     if(state.screen === 'detail') body = renderDetail();
@@ -498,8 +541,16 @@ function render(){
       modalDiv.innerHTML = renderWalletModal();
       app.appendChild(modalDiv.firstElementChild);
     }
+    if(state.showRulesModal){
+      const modalDiv = document.createElement('div');
+      modalDiv.innerHTML = renderRulesModal();
+      app.appendChild(modalDiv.firstElementChild);
+    }
   }
   attachEvents();
+  // Auto-scroll chat to bottom after render
+  const chatBox = document.getElementById('chatMessages');
+  if(chatBox) chatBox.scrollTop = chatBox.scrollHeight;
 }
 
 function renderBottomNav(){
@@ -771,6 +822,16 @@ function renderProfile(){
         <div class="room-row"><span class="rl"><i class="fa-solid fa-id-badge"></i> Role</span><span class="rv" style="text-transform:capitalize;">${u?.role || 'player'}</span></div>
       </div>
 
+      <div class="section-label" style="padding-left:0; padding-right:0;">
+        <h2><i class="fa-solid fa-chart-simple"></i> Lifetime Stats</h2>
+      </div>
+      <div class="stat-grid-mini">
+        <div class="stat-mini"><div class="sm-val">${state.myStats.totalMatches||0}</div><div class="sm-lbl">Matches</div></div>
+        <div class="stat-mini"><div class="sm-val" style="color:var(--danger)">${state.myStats.totalKills||0}</div><div class="sm-lbl">Kills</div></div>
+        <div class="stat-mini"><div class="sm-val" style="color:var(--gold)">${state.myStats.totalWins||0}</div><div class="sm-lbl">Wins</div></div>
+        <div class="stat-mini"><div class="sm-val" style="color:var(--success)">₨${state.myStats.totalEarnings||0}</div><div class="sm-lbl">Earned</div></div>
+      </div>
+
       <div style="display:flex; gap:10px; margin: 14px 0;">
         <button class="primary-btn" id="depositBtn" style="margin-top:0;"><i class="fa-solid fa-plus"></i> Add Money</button>
         <button class="ghost-btn" id="withdrawBtn" style="margin-top:0;"><i class="fa-solid fa-arrow-up"></i> Withdraw</button>
@@ -783,6 +844,11 @@ function renderProfile(){
           <button class="join-btn" id="copyReferralBtn" style="padding:10px 14px;"><i class="fa-solid fa-copy"></i></button>
         </div>
         <p style="font-size:11.5px; color:var(--text-low); margin-top:8px;">Share your code. When your friend joins their first tournament, you both get ₨10! ${u?.referralCount ? `<br><span style="color:var(--success); font-weight:700;">${u.referralCount} friend${u.referralCount>1?'s':''} joined so far 🎉</span>` : ''}</p>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-bottom:14px;">
+        <button class="ghost-btn" id="openSupportBtn" style="margin-top:0;"><i class="fa-solid fa-headset"></i> Support Chat</button>
+        <button class="ghost-btn" id="openFaqBtn" style="margin-top:0;"><i class="fa-solid fa-circle-question"></i> FAQ</button>
       </div>
 
       <div class="section-label" style="padding-left:0; padding-right:0;">
@@ -809,6 +875,103 @@ function renderTxnRow(t){
       <div>
         <div class="txn-amt" style="color:${isDeposit?'var(--success)':'var(--gold)'}">${isDeposit?'+':'-'}₨${t.amount}</div>
         <div class="txn-status ${t.status.toLowerCase()}" style="text-align:right;">${t.status}</div>
+      </div>
+    </div>
+  `;
+}
+
+/* ============== SUPPORT CHAT ============== */
+function renderSupportChat(){
+  return `
+    <div class="chat-wrap">
+      <div class="detail-header" style="padding-bottom:12px; border-bottom:1px solid var(--line);">
+        <button class="back-btn" id="closeSupportBtn"><i class="fa-solid fa-arrow-left"></i></button>
+        <div style="font-family:'Saira Condensed'; font-weight:700; font-size:16px;"><i class="fa-solid fa-headset" style="color:var(--flame); margin-right:6px;"></i>Support Chat</div>
+      </div>
+      <div class="chat-messages" id="chatMessages">
+        ${state.supportMessages.length === 0 ? `
+          <div class="empty-state" style="padding:40px 20px;"><i class="fa-solid fa-comments"></i>No messages yet. Send us your question or issue below!</div>
+        ` : state.supportMessages.map(m => `
+          <div class="chat-bubble ${m.senderRole === 'player' ? 'mine' : 'theirs'}">
+            ${m.text ? `<div>${m.text}</div>` : ''}
+            ${m.imageUrl ? `<img src="${m.imageUrl}">` : ''}
+            <div class="chat-time">${m.senderRole !== 'player' ? 'Support · ' : ''}${fmtDate(m.createdAt)}</div>
+          </div>
+        `).join('')}
+      </div>
+      ${state.pendingChatImage ? `
+        <div class="chat-preview-bar">
+          <img src="${state.pendingChatImagePreview}">
+          <span style="font-size:12px; color:var(--text-mid); flex:1;">Image ready to send</span>
+          <button id="removeChatImageBtn" style="background:none; border:none; color:var(--danger); font-size:16px;">✕</button>
+        </div>
+      ` : ''}
+      <div class="chat-input-bar">
+        <input type="file" id="chatImageInput" accept="image/*" style="display:none;">
+        <button class="chat-attach-btn" id="chatAttachBtn"><i class="fa-solid fa-paperclip"></i></button>
+        <textarea id="chatTextInput" rows="1" placeholder="Type your message..."></textarea>
+        <button class="chat-send-btn" id="chatSendBtn"><i class="fa-solid fa-paper-plane"></i></button>
+      </div>
+    </div>
+  `;
+}
+
+/* ============== FAQ ============== */
+const FAQ_DATA = [
+  { q: 'How do I join a tournament?', a: 'Go to the Arena tab, pick Free Fire or PUBG, tap a tournament card, then tap Join. For paid tournaments, the entry fee is deducted from your wallet.' },
+  { q: 'When do I get the Room ID and Password?', a: 'The admin releases Room ID/Password shortly before the match starts. You\'ll get a push notification the moment it\'s released, and it will appear on the tournament\'s detail page.' },
+  { q: 'How do I get my prize money?', a: 'After the match, the admin reviews results and credits prizes directly to your in-app wallet. If you won or got kills, upload a screenshot of your in-game scoreboard on the tournament page to help speed up verification.' },
+  { q: 'How do I add money to my wallet?', a: 'Go to Profile > Add Money. Send the amount to the displayed eSewa number, then submit the transaction ID. Admin will verify and credit your wallet, usually within a few hours.' },
+  { q: 'How do I withdraw my winnings?', a: 'Go to Profile > Withdraw, enter the amount and your eSewa number. The amount is deducted immediately and sent to your eSewa within 24 hours.' },
+  { q: 'What happens if I cheat or hack?', a: 'Any player found using hacks, cheats, or exploits will be permanently banned and forfeit their wallet balance. Play fair!' },
+  { q: 'I have an issue, who do I contact?', a: 'Use the Support Chat from your Profile tab. Our team will reply directly in the app, and you can attach screenshots if needed.' },
+];
+
+function renderFaq(){
+  return `
+    <div class="detail-header" style="padding-bottom:12px; border-bottom:1px solid var(--line);">
+      <button class="back-btn" id="closeFaqBtn"><i class="fa-solid fa-arrow-left"></i></button>
+      <div style="font-family:'Saira Condensed'; font-weight:700; font-size:16px;"><i class="fa-solid fa-circle-question" style="color:var(--flame); margin-right:6px;"></i>FAQ</div>
+    </div>
+    <div style="padding:16px;">
+      ${FAQ_DATA.map((item, i) => `
+        <div class="faq-item" data-faq-index="${i}">
+          <div class="faq-q">
+            <span>${item.q}</span>
+            <i class="fa-solid fa-chevron-down faq-chevron" style="transition:transform .2s;"></i>
+          </div>
+          <div class="faq-a">${item.a}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+/* ============== JOIN RULES MODAL ============== */
+const JOIN_RULES = [
+  { icon: 'fa-shield-halved', text: 'No hacking, cheating, or use of any third-party tools. Violators will be permanently banned and forfeit their wallet balance.' },
+  { icon: 'fa-camera', text: 'If you win or get kills, upload a screenshot of your in-game scoreboard as proof to help verify and speed up your prize payout.' },
+  { icon: 'fa-lock', text: 'Room ID and Password are confidential. Do not share them outside your registered team.' },
+  { icon: 'fa-clock', text: 'Join the match on time. Late entries may not be allowed into the room.' },
+  { icon: 'fa-gavel', text: 'The admin\'s decision on final results, rankings, and prizes is final.' },
+];
+
+function renderRulesModal(){
+  return `
+    <div class="modal-overlay show">
+      <div class="modal-sheet">
+        <div class="modal-head">
+          <h3><i class="fa-solid fa-list-check"></i> Tournament Rules</h3>
+          <button class="modal-close" id="closeRulesModal">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="rules-list">
+            ${JOIN_RULES.map(r => `
+              <div class="rule-row"><i class="fa-solid ${r.icon}"></i><span>${r.text}</span></div>
+            `).join('')}
+          </div>
+          <button class="primary-btn" id="confirmJoinBtn"><i class="fa-solid fa-check"></i> I Understand, Join Now</button>
+        </div>
       </div>
     </div>
   `;
@@ -995,6 +1158,20 @@ async function refreshUser(){
   }catch(e){ /* silent */ }
 }
 
+async function loadMyStats(){
+  if(!state.token) return;
+  try{
+    state.myStats = await api('/auth/my-stats');
+  }catch(e){ /* silent */ }
+}
+
+async function loadSupportMessages(){
+  if(!state.token) return;
+  try{
+    state.supportMessages = await api('/support/my');
+  }catch(e){ /* silent */ }
+}
+
 async function loadEsewaNumber(){
   try{
     const data = await api('/transactions/settings/esewa', 'GET', null, false);
@@ -1127,13 +1304,19 @@ function attachEvents(){
 
   // Join from detail
   const joinDetailBtn = document.getElementById('joinDetailBtn');
-  if(joinDetailBtn) joinDetailBtn.onclick = async () => {
+  if(joinDetailBtn) joinDetailBtn.onclick = () => {
+    state.showRulesModal = true; render();
+  };
+
+  // Rules modal: confirm join
+  const confirmJoinBtn = document.getElementById('confirmJoinBtn');
+  if(confirmJoinBtn) confirmJoinBtn.onclick = async () => {
     const t = state.activeTournament;
-    joinDetailBtn.disabled = true;
-    const originalHtml = joinDetailBtn.innerHTML;
-    joinDetailBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Joining...';
+    confirmJoinBtn.disabled = true;
+    confirmJoinBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Joining...';
     try{
       await api('/registrations/join/' + t._id, 'POST', { teamName: state.user.name });
+      state.showRulesModal = false;
       showToast('Joined successfully! 🔥');
       await refreshUser();
       await loadMyRegs();
@@ -1141,9 +1324,12 @@ function attachEvents(){
       await loadTournaments();
     }catch(e){
       showToast(e.message, true);
-      joinDetailBtn.disabled = false; joinDetailBtn.innerHTML = originalHtml;
+      state.showRulesModal = false;
+      render();
     }
   };
+  const closeRulesModal = document.getElementById('closeRulesModal');
+  if(closeRulesModal) closeRulesModal.onclick = () => { state.showRulesModal = false; render(); };
 
   // Screenshot upload - clicking the visible button triggers the hidden file input
   const uploadScreenshotBtn = document.getElementById('uploadScreenshotBtn');
@@ -1180,7 +1366,7 @@ function attachEvents(){
       if(state.screen === 'home'){ await refreshUser(); await loadTournaments(); }
       if(state.screen === 'history') await loadMyRegs();
       if(state.screen === 'leaderboard') await loadGlobalLeaderboard();
-      if(state.screen === 'profile'){ await refreshUser(); await loadMyTxns(); }
+      if(state.screen === 'profile'){ await refreshUser(); await loadMyTxns(); await loadMyStats(); }
       render();
     };
   });
@@ -1205,6 +1391,60 @@ function attachEvents(){
       showToast('Your code: ' + code);
     }
   };
+
+  // Support chat: open/close
+  const openSupportBtn = document.getElementById('openSupportBtn');
+  if(openSupportBtn) openSupportBtn.onclick = async () => {
+    state.showSupportChat = true; render();
+    await loadSupportMessages(); render();
+  };
+  const closeSupportBtn = document.getElementById('closeSupportBtn');
+  if(closeSupportBtn) closeSupportBtn.onclick = () => { state.showSupportChat = false; state.pendingChatImage = null; render(); };
+
+  // Support chat: attach image
+  const chatAttachBtn = document.getElementById('chatAttachBtn');
+  const chatImageInput = document.getElementById('chatImageInput');
+  if(chatAttachBtn && chatImageInput){
+    chatAttachBtn.onclick = () => chatImageInput.click();
+    chatImageInput.onchange = () => {
+      const file = chatImageInput.files[0];
+      if(!file) return;
+      state.pendingChatImage = file;
+      state.pendingChatImagePreview = URL.createObjectURL(file);
+      render();
+    };
+  }
+  const removeChatImageBtn = document.getElementById('removeChatImageBtn');
+  if(removeChatImageBtn) removeChatImageBtn.onclick = () => { state.pendingChatImage = null; render(); };
+
+  // Support chat: send message
+  const chatSendBtn = document.getElementById('chatSendBtn');
+  if(chatSendBtn) chatSendBtn.onclick = async () => {
+    const textInput = document.getElementById('chatTextInput');
+    const text = textInput.value.trim();
+    if(!text && !state.pendingChatImage){ return; }
+
+    chatSendBtn.disabled = true;
+    try{
+      const formData = new FormData();
+      if(text) formData.append('text', text);
+      if(state.pendingChatImage) formData.append('image', state.pendingChatImage);
+      await apiUpload('/support/send', formData);
+      state.pendingChatImage = null;
+      await loadSupportMessages();
+      render();
+    }catch(e){ showToast(e.message, true); }
+    chatSendBtn.disabled = false;
+  };
+
+  // FAQ: open/close + accordion toggle
+  const openFaqBtn = document.getElementById('openFaqBtn');
+  if(openFaqBtn) openFaqBtn.onclick = () => { state.showFaq = true; render(); };
+  const closeFaqBtn = document.getElementById('closeFaqBtn');
+  if(closeFaqBtn) closeFaqBtn.onclick = () => { state.showFaq = false; render(); };
+  app.querySelectorAll('.faq-item').forEach(item => {
+    item.querySelector('.faq-q').onclick = () => item.classList.toggle('open');
+  });
 
   // Wallet: open modals
   const depositBtn = document.getElementById('depositBtn');

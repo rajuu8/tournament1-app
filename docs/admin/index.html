@@ -131,6 +131,27 @@
   .success-msg{ background:#3ddc841a; border:1px solid #3ddc8444; color:var(--success); padding:10px 12px; border-radius:9px; font-size:12.5px; margin-bottom:14px; display:none; }
 
   .empty-row td{ text-align:center; color:var(--text-low); padding:40px 0; }
+
+  /* Support Chat */
+  .chat-layout{ display:flex; height: calc(100vh - 52px); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+  .conv-list{ width:280px; border-right:1px solid var(--line); overflow-y:auto; flex-shrink:0; }
+  .conv-item{ padding:14px 16px; border-bottom:1px solid var(--line); cursor:pointer; position:relative; }
+  .conv-item:hover{ background:#ffffff05; }
+  .conv-item.active{ background: var(--flame-dim); }
+  .conv-name{ font-weight:700; font-size:13.5px; }
+  .conv-preview{ font-size:11.5px; color:var(--text-low); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px; }
+  .conv-unread{ position:absolute; top:14px; right:14px; background:var(--flame); color:#fff; font-size:10px; font-weight:800; border-radius:10px; padding:2px 7px; }
+  .chat-panel{ flex:1; display:flex; flex-direction:column; }
+  .chat-panel-empty{ flex:1; display:flex; align-items:center; justify-content:center; color:var(--text-low); flex-direction:column; gap:10px; }
+  .chat-panel-head{ padding:14px 18px; border-bottom:1px solid var(--line); font-weight:700; }
+  .admin-chat-messages{ flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  .admin-bubble{ max-width:60%; padding:10px 13px; border-radius:14px; font-size:13.5px; line-height:1.4; }
+  .admin-bubble.fromplayer{ align-self:flex-start; background:var(--bg-card); border:1px solid var(--line); }
+  .admin-bubble.fromadmin{ align-self:flex-end; background: linear-gradient(135deg, var(--flame), #ffd97a); color:#1a1200; }
+  .admin-bubble img{ max-width:100%; border-radius:8px; margin-top:6px; display:block; }
+  .admin-chat-time{ font-size:9.5px; opacity:0.6; margin-top:4px; }
+  .admin-chat-input{ display:flex; gap:8px; padding:12px 16px; border-top:1px solid var(--line); align-items:flex-end; }
+  .admin-chat-input textarea{ flex:1; background:var(--bg-card); border:1px solid var(--line); border-radius:10px; padding:10px 13px; color:var(--text-hi); font-family:'Rajdhani'; font-size:14px; resize:none; max-height:80px; }
   .loader{ display:flex; justify-content:center; padding:40px 0; color:var(--text-mid); }
   .loader i{ font-size:20px; animation:spin .8s linear infinite; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
@@ -176,6 +197,11 @@ let state = {
   transactions: [],
   txnLoading: false,
   esewaNumber: '',
+  conversations: [],
+  activeConversation: null,
+  conversationMessages: [],
+  pendingChatImage: null,
+  supportAdmins: [],
 };
 
 function ls_get(k){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
@@ -226,6 +252,7 @@ function render(){
   if(!state.token){
     app.innerHTML = renderAuth();
   } else {
+    const defaultPage = state.user?.role === 'support-admin' ? 'support' : 'tournaments';
     app.innerHTML = `
       <div class="layout">
         ${renderSidebar()}
@@ -233,7 +260,9 @@ function render(){
         state.page === 'registrations' ? renderRegistrationsPage() :
         state.page === 'transactions' ? renderTransactionsPage() :
         state.page === 'settings' ? renderSettingsPage() :
-        renderTournamentsPage()
+        state.page === 'support' ? renderSupportPage() :
+        state.page === 'admins' ? renderAdminsPage() :
+        (state.user?.role === 'support-admin' ? renderSupportPage() : renderTournamentsPage())
       }</div>
       </div>
       ${renderModal()}
@@ -277,12 +306,18 @@ function renderSidebar(){
     <div class="sidebar">
       <div class="sb-brand">
         <div class="sb-mark"><i class="fa-solid fa-crown"></i></div>
-        <div class="sb-name">CLASH<span>KING</span><small>ADMIN PANEL</small></div>
+        <div class="sb-name">CLASH<span>KING</span><small>${state.user?.role === 'support-admin' ? 'SUPPORT ADMIN' : 'ADMIN PANEL'}</small></div>
       </div>
-      <button class="nav-link ${state.page==='tournaments'?'active':''}" data-page="tournaments"><i class="fa-solid fa-trophy"></i> <span class="mobile-hide">Tournaments</span></button>
-      <button class="nav-link ${state.page==='registrations'?'active':''}" data-page="registrations"><i class="fa-solid fa-users"></i> <span class="mobile-hide">Players</span></button>
-      <button class="nav-link ${state.page==='transactions'?'active':''}" data-page="transactions"><i class="fa-solid fa-money-bill-transfer"></i> <span class="mobile-hide">Wallet Requests</span></button>
-      <button class="nav-link ${state.page==='settings'?'active':''}" data-page="settings"><i class="fa-solid fa-gear"></i> <span class="mobile-hide">Settings</span></button>
+      ${state.user?.role !== 'support-admin' ? `
+        <button class="nav-link ${state.page==='tournaments'?'active':''}" data-page="tournaments"><i class="fa-solid fa-trophy"></i> <span class="mobile-hide">Tournaments</span></button>
+        <button class="nav-link ${state.page==='registrations'?'active':''}" data-page="registrations"><i class="fa-solid fa-users"></i> <span class="mobile-hide">Players</span></button>
+        <button class="nav-link ${state.page==='transactions'?'active':''}" data-page="transactions"><i class="fa-solid fa-money-bill-transfer"></i> <span class="mobile-hide">Wallet Requests</span></button>
+      ` : ''}
+      <button class="nav-link ${state.page==='support'?'active':''}" data-page="support"><i class="fa-solid fa-headset"></i> <span class="mobile-hide">Support Chats</span></button>
+      ${state.user?.role !== 'support-admin' ? `
+        <button class="nav-link ${state.page==='admins'?'active':''}" data-page="admins"><i class="fa-solid fa-user-shield"></i> <span class="mobile-hide">Manage Admins</span></button>
+        <button class="nav-link ${state.page==='settings'?'active':''}" data-page="settings"><i class="fa-solid fa-gear"></i> <span class="mobile-hide">Settings</span></button>
+      ` : ''}
       <div class="sidebar-bottom">
         <button class="nav-link logout-link" id="logoutBtn"><i class="fa-solid fa-right-from-bracket"></i> <span class="mobile-hide">Logout</span></button>
       </div>
@@ -451,8 +486,108 @@ function renderSettingsPage(){
   `;
 }
 
+function renderSupportPage(){
+  const conv = state.activeConversation;
+  return `
+    <div class="topbar">
+      <div>
+        <div class="page-title">Support Chats</div>
+        <div class="page-sub">Reply to player questions and issues</div>
+      </div>
+    </div>
+    <div class="chat-layout">
+      <div class="conv-list">
+        ${state.conversations.length === 0 ? `<div style="padding:30px 16px; color:var(--text-low); font-size:13px; text-align:center;">No conversations yet.</div>` : ''}
+        ${state.conversations.map(c => `
+          <div class="conv-item ${conv && conv.userId === c.userId ? 'active' : ''}" data-convuser="${c.userId}">
+            ${c.unreadCount > 0 ? `<span class="conv-unread">${c.unreadCount}</span>` : ''}
+            <div class="conv-name">${c.user?.name || 'Unknown'}</div>
+            <div class="conv-preview">${c.lastMessage?.imageUrl && !c.lastMessage?.text ? '📷 Image' : (c.lastMessage?.text || '')}</div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="chat-panel">
+        ${!conv ? `
+          <div class="chat-panel-empty"><i class="fa-solid fa-comments" style="font-size:32px;"></i><span>Select a conversation to view messages</span></div>
+        ` : `
+          <div class="chat-panel-head">${conv.user?.name || 'Player'} <span style="color:var(--text-low); font-weight:600; font-size:12px;">· ${conv.user?.phone || ''}</span></div>
+          <div class="admin-chat-messages" id="adminChatMessages">
+            ${state.conversationMessages.map(m => `
+              <div class="admin-bubble ${m.senderRole === 'player' ? 'fromplayer' : 'fromadmin'}">
+                ${m.text ? `<div>${m.text}</div>` : ''}
+                ${m.imageUrl ? `<img src="${m.imageUrl}">` : ''}
+                <div class="admin-chat-time">${m.senderRole !== 'player' ? 'You · ' : ''}${fmtDate(m.createdAt)}</div>
+              </div>
+            `).join('')}
+          </div>
+          ${state.pendingChatImage ? `
+            <div style="padding:8px 16px; display:flex; align-items:center; gap:8px; border-top:1px solid var(--line);">
+              <img src="${state.pendingChatImagePreview}" style="width:40px;height:40px;border-radius:7px;object-fit:cover;">
+              <span style="font-size:12px; color:var(--text-mid); flex:1;">Image ready</span>
+              <button id="removeAdminChatImageBtn" style="background:none;border:none;color:var(--danger);">✕</button>
+            </div>
+          ` : ''}
+          <div class="admin-chat-input">
+            <input type="file" id="adminChatImageInput" accept="image/*" style="display:none;">
+            <button class="btn btn-secondary btn-sm" id="adminChatAttachBtn"><i class="fa-solid fa-paperclip"></i></button>
+            <textarea id="adminChatTextInput" rows="1" placeholder="Type a reply..."></textarea>
+            <button class="btn btn-primary btn-sm" id="adminChatSendBtn"><i class="fa-solid fa-paper-plane"></i></button>
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+}
+
+function renderAdminsPage(){
+  return `
+    <div class="topbar">
+      <div>
+        <div class="page-title">Manage Admins</div>
+        <div class="page-sub">Create limited support-admin accounts (chat access only)</div>
+      </div>
+      <button class="btn btn-primary" id="newSupportAdminBtn"><i class="fa-solid fa-plus"></i> New Support Admin</button>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3><i class="fa-solid fa-user-shield"></i> Support Admins</h3></div>
+      <table>
+        <thead><tr><th>Name</th><th>Phone</th><th>Created</th><th>Action</th></tr></thead>
+        <tbody>
+          ${state.supportAdmins.length === 0 ? '<tr class="empty-row"><td colspan="4">No support admins yet. They can only access Support Chats - nothing else.</td></tr>' : ''}
+          ${state.supportAdmins.map(a => `
+            <tr>
+              <td style="font-weight:700;">${a.name}</td>
+              <td>${a.phone}</td>
+              <td style="font-size:12px; color:var(--text-mid);">${fmtDate(a.createdAt)}</td>
+              <td><button class="btn btn-danger btn-sm" data-removeadmin="${a._id}"><i class="fa-solid fa-trash"></i> Remove</button></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 function renderModal(){
   if(!state.modal) return '';
+
+  if(state.modal === 'newSupportAdmin'){
+    return `
+      <div class="modal-overlay show">
+        <div class="modal">
+          <div class="modal-head"><h3><i class="fa-solid fa-user-shield"></i> New Support Admin</h3><button class="modal-close" id="closeModal">✕</button></div>
+          <div class="modal-body">
+            <div class="error-msg" id="err"></div>
+            <div class="field"><label>Name</label><input type="text" id="saName" placeholder="Support admin's name"></div>
+            <div class="field"><label>Phone Number</label><input type="tel" id="saPhone" placeholder="98XXXXXXXX"></div>
+            <div class="field"><label>Password</label><input type="password" id="saPassword" placeholder="Set a password for them"></div>
+            <p style="font-size:11.5px; color:var(--text-low); margin-bottom:14px;">They will only have access to Support Chats - no tournament, wallet, or settings access.</p>
+            <button class="btn btn-primary" id="createSupportAdminBtn" style="width:100%; justify-content:center;"><i class="fa-solid fa-check"></i> Create Account</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
 
   if(state.modal === 'createTournament'){
     return `
@@ -629,6 +764,24 @@ async function loadEsewaSetting(){
   }catch(e){ /* silent */ }
 }
 
+async function loadConversations(){
+  try{
+    state.conversations = await api('/support/conversations');
+  }catch(e){ showToast(e.message, true); }
+}
+
+async function loadConversationMessages(userId){
+  try{
+    state.conversationMessages = await api('/support/conversations/' + userId);
+  }catch(e){ showToast(e.message, true); }
+}
+
+async function loadSupportAdmins(){
+  try{
+    state.supportAdmins = await api('/auth/admin/support-admins');
+  }catch(e){ showToast(e.message, true); }
+}
+
 /* ============ EVENTS ============ */
 function attachEvents(){
   const app = document.getElementById('app');
@@ -647,7 +800,12 @@ function attachEvents(){
       const data = await api('/auth/admin/login', 'POST', { phone, password }, false);
       state.token = data.token; state.user = data.user;
       ls_set('admin_token', data.token); ls_set('admin_user', data.user);
-      await loadTournaments();
+      if(data.user.role === 'support-admin'){
+        state.page = 'support';
+        await loadConversations();
+      } else {
+        await loadTournaments();
+      }
     }catch(e){ err.textContent = e.message; err.style.display='block'; }
   };
 
@@ -672,12 +830,97 @@ function attachEvents(){
       state.page = btn.dataset.page;
       if(state.page === 'transactions') await loadTransactions('Pending');
       if(state.page === 'settings') await loadEsewaSetting();
+      if(state.page === 'support'){ state.activeConversation = null; await loadConversations(); }
+      if(state.page === 'admins') await loadSupportAdmins();
       render();
     };
   });
 
   const logoutBtn = document.getElementById('logoutBtn');
   if(logoutBtn) logoutBtn.onclick = () => { ls_clear(); state.token=null; state.user=null; render(); };
+
+  // Support chat: select conversation
+  app.querySelectorAll('[data-convuser]').forEach(item => {
+    item.onclick = async () => {
+      const userId = item.dataset.convuser;
+      state.activeConversation = state.conversations.find(c => c.userId === userId);
+      await loadConversationMessages(userId);
+      await loadConversations(); // refresh unread counts
+      render();
+      const box = document.getElementById('adminChatMessages');
+      if(box) box.scrollTop = box.scrollHeight;
+    };
+  });
+
+  // Support chat: attach image
+  const adminChatAttachBtn = document.getElementById('adminChatAttachBtn');
+  const adminChatImageInput = document.getElementById('adminChatImageInput');
+  if(adminChatAttachBtn && adminChatImageInput){
+    adminChatAttachBtn.onclick = () => adminChatImageInput.click();
+    adminChatImageInput.onchange = () => {
+      const file = adminChatImageInput.files[0];
+      if(!file) return;
+      state.pendingChatImage = file;
+      state.pendingChatImagePreview = URL.createObjectURL(file);
+      render();
+    };
+  }
+  const removeAdminChatImageBtn = document.getElementById('removeAdminChatImageBtn');
+  if(removeAdminChatImageBtn) removeAdminChatImageBtn.onclick = () => { state.pendingChatImage = null; render(); };
+
+  // Support chat: send reply
+  const adminChatSendBtn = document.getElementById('adminChatSendBtn');
+  if(adminChatSendBtn) adminChatSendBtn.onclick = async () => {
+    const textInput = document.getElementById('adminChatTextInput');
+    const text = textInput.value.trim();
+    if(!text && !state.pendingChatImage) return;
+    adminChatSendBtn.disabled = true;
+    try{
+      const formData = new FormData();
+      if(text) formData.append('text', text);
+      if(state.pendingChatImage) formData.append('image', state.pendingChatImage);
+      await apiUpload('/support/conversations/' + state.activeConversation.userId + '/reply', formData);
+      state.pendingChatImage = null;
+      await loadConversationMessages(state.activeConversation.userId);
+      await loadConversations();
+      render();
+      const box = document.getElementById('adminChatMessages');
+      if(box) box.scrollTop = box.scrollHeight;
+    }catch(e){ showToast(e.message, true); }
+    adminChatSendBtn.disabled = false;
+  };
+
+  // Manage admins: new support admin
+  const newSupportAdminBtn = document.getElementById('newSupportAdminBtn');
+  if(newSupportAdminBtn) newSupportAdminBtn.onclick = () => { state.modal = 'newSupportAdmin'; render(); };
+
+  const createSupportAdminBtn = document.getElementById('createSupportAdminBtn');
+  if(createSupportAdminBtn) createSupportAdminBtn.onclick = async () => {
+    const name = document.getElementById('saName').value.trim();
+    const phone = document.getElementById('saPhone').value.trim();
+    const password = document.getElementById('saPassword').value;
+    const err = document.getElementById('err');
+    if(!name || !phone || !password){ err.textContent='All fields are required'; err.style.display='block'; return; }
+    try{
+      await api('/auth/admin/create-support-admin', 'POST', { name, phone, password });
+      showToast('Support admin created! ✅');
+      state.modal = null;
+      await loadSupportAdmins();
+      render();
+    }catch(e){ err.textContent = e.message; err.style.display='block'; }
+  };
+
+  app.querySelectorAll('[data-removeadmin]').forEach(btn => {
+    btn.onclick = async () => {
+      if(!confirm('Remove this support admin\'s access?')) return;
+      try{
+        await api('/auth/admin/support-admins/' + btn.dataset.removeadmin, 'DELETE');
+        showToast('Support admin removed');
+        await loadSupportAdmins();
+        render();
+      }catch(e){ showToast(e.message, true); }
+    };
+  });
 
   // New tournament
   const newBtn = document.getElementById('newTournamentBtn');
@@ -861,7 +1104,14 @@ function attachEvents(){
 
 /* ============ INIT ============ */
 (async function init(){
-  if(state.token) await loadTournaments();
+  if(state.token){
+    if(state.user?.role === 'support-admin'){
+      state.page = 'support';
+      await loadConversations();
+    } else {
+      await loadTournaments();
+    }
+  }
   render();
 })();
 </script>

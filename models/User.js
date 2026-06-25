@@ -8,7 +8,7 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true },
     gameId: { type: String, trim: true }, // Free Fire / PUBG in-game ID
     gameUid: { type: String, trim: true }, // in-game UID number
-    role: { type: String, enum: ['player', 'admin'], default: 'player' },
+    role: { type: String, enum: ['player', 'admin', 'support-admin'], default: 'player' },
     walletBalance: { type: Number, default: 0 }, // for prize payouts
 
     referralCode: { type: String, unique: true, sparse: true }, // this user's own code to share

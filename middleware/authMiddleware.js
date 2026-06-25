@@ -19,7 +19,7 @@ const protect = (req, res, next) => {
   }
 };
 
-// Only allow admins
+// Only allow full admins
 const adminOnly = (req, res, next) => {
   if (req.user && req.user.role === 'admin') {
     next();
@@ -28,4 +28,13 @@ const adminOnly = (req, res, next) => {
   }
 };
 
-module.exports = { protect, adminOnly };
+// Allow full admins OR support-admins (used for chat/support routes only)
+const anyAdmin = (req, res, next) => {
+  if (req.user && (req.user.role === 'admin' || req.user.role === 'support-admin')) {
+    next();
+  } else {
+    res.status(403).json({ message: 'Admin access only' });
+  }
+};
+
+module.exports = { protect, adminOnly, anyAdmin };
