@@ -806,6 +806,8 @@ function attachEvents(){
       } else {
         await loadTournaments();
       }
+      render();
+      setTimeout(setupPushNotifications, 1500);
     }catch(e){ err.textContent = e.message; err.style.display='block'; }
   };
 
@@ -1103,6 +1105,51 @@ function attachEvents(){
 }
 
 /* ============ INIT ============ */
+/* ============== PUSH NOTIFICATIONS ============== */
+async function setupPushNotifications(){
+  // Only works inside the Capacitor APK wrapper - silently does nothing on a plain web browser
+  try{
+    if(!window.Capacitor || !window.Capacitor.isNativePlatform || !window.Capacitor.isNativePlatform()) return;
+    if(!window.Capacitor.Plugins || !window.Capacitor.Plugins.PushNotifications) return;
+  }catch(e){ return; }
+
+  const { PushNotifications } = window.Capacitor.Plugins;
+
+  try{
+    let permStatus;
+    try{
+      permStatus = await PushNotifications.checkPermissions();
+    }catch(e){ return; }
+
+    if(permStatus.receive !== 'granted'){
+      try{
+        const req = await PushNotifications.requestPermissions();
+        if(req.receive !== 'granted') return;
+      }catch(e){ return; }
+    }
+
+    try{
+      await PushNotifications.register();
+    }catch(e){ return; }
+
+    PushNotifications.addListener('registration', async (token) => {
+      try{
+        await api('/auth/fcm-token', 'PUT', { fcmToken: token.value });
+      }catch(e){ /* silent */ }
+    });
+
+    PushNotifications.addListener('registrationError', (err) => {
+      console.error('Push registration error:', err);
+    });
+
+    PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+      state.page = 'support';
+      loadConversations().then(render);
+    });
+  }catch(e){ /* silent - push notifications are a nice-to-have, never block the app */ }
+}
+
+/* ============== INIT ============== */
 (async function init(){
   if(state.token){
     if(state.user?.role === 'support-admin'){
@@ -1111,6 +1158,7 @@ function attachEvents(){
     } else {
       await loadTournaments();
     }
+    setTimeout(setupPushNotifications, 1500);
   }
   render();
 })();

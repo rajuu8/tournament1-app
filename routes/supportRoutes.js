@@ -3,7 +3,7 @@ const multer = require('multer');
 const SupportMessage = require('../models/SupportMessage');
 const User = require('../models/User');
 const { protect, anyAdmin } = require('../middleware/authMiddleware');
-const { sendPushNotification } = require('../config/firebase');
+const { sendPushNotification, sendPushToMany } = require('../config/firebase');
 const { uploadImage } = require('../config/cloudinary');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -51,6 +51,20 @@ router.post('/send', protect, upload.single('image'), async (req, res) => {
       readByAdmin: false,
       readByPlayer: true,
     });
+
+    // Notify all admins and support-admins that a player needs help
+    const player = await User.findById(req.user.id).select('name fcmToken');
+    const admins = await User.find({
+      role: { $in: ['admin', 'support-admin'] },
+      fcmToken: { $ne: '' },
+    }).select('fcmToken');
+    const tokens = admins.map(a => a.fcmToken).filter(Boolean);
+    sendPushToMany(
+      tokens,
+      `💬 New message from ${player?.name || 'a player'}`,
+      text ? text.slice(0, 80) : '📷 Sent an image',
+      { type: 'new_support_message', userId: req.user.id }
+    );
 
     res.status(201).json(message);
   } catch (err) {
