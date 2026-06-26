@@ -117,7 +117,8 @@ jobs:
       - name: Decode release keystore
         working-directory: ./apk-build/android
         run: |
-          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > app/clashking-release.keystore
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > "$GITHUB_WORKSPACE/apk-build/android/app/clashking-release.keystore"
+          ls -la "$GITHUB_WORKSPACE/apk-build/android/app/clashking-release.keystore"
 
       - name: Build Signed Release APK
         working-directory: ./apk-build/android
@@ -127,7 +128,7 @@ jobs:
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file=clashking-release.keystore \
+            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/apk-build/android/app/clashking-release.keystore" \
             -Pandroid.injected.signing.store.password=$RELEASE_STORE_PASSWORD \
             -Pandroid.injected.signing.key.alias=$RELEASE_KEY_ALIAS \
             -Pandroid.injected.signing.key.password=$RELEASE_KEY_PASSWORD
