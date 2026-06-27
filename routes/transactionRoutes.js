@@ -3,9 +3,19 @@ const Transaction = require('../models/Transaction');
 const Settings = require('../models/Settings');
 const User = require('../models/User');
 const { protect, adminOnly } = require('../middleware/authMiddleware');
-const { sendPushNotification } = require('../config/firebase');
+const { sendPushNotification, sendPushToMany } = require('../config/firebase');
 
 const router = express.Router();
+
+// Notifies all admins and support-admins who have push tokens registered
+async function notifyAdmins(title, body, data = {}) {
+  const admins = await User.find({
+    role: { $in: ['admin', 'support-admin'] },
+    fcmToken: { $ne: '' },
+  }).select('fcmToken');
+  const tokens = admins.map(a => a.fcmToken).filter(Boolean);
+  sendPushToMany(tokens, title, body, data);
+}
 
 /* ===================== SETTINGS (eSewa number) ===================== */
 
@@ -59,6 +69,13 @@ router.post('/deposit', protect, async (req, res) => {
       status: 'Pending',
     });
 
+    const depositor = await User.findById(req.user.id).select('name');
+    notifyAdmins(
+      '💰 New Deposit Request',
+      `${depositor?.name || 'A player'} wants to deposit ₨${amount}. Tap to review.`,
+      { type: 'new_deposit', transactionId: txn._id.toString() }
+    );
+
     res.status(201).json(txn);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -95,6 +112,13 @@ router.post('/withdraw', protect, async (req, res) => {
       receiverEsewaNumber,
       status: 'Pending',
     });
+
+    const withdrawer = await User.findById(req.user.id).select('name');
+    notifyAdmins(
+      '💸 New Withdrawal Request',
+      `${withdrawer?.name || 'A player'} wants to withdraw ₨${amount}. Tap to review.`,
+      { type: 'new_withdrawal', transactionId: txn._id.toString() }
+    );
 
     res.status(201).json(txn);
   } catch (err) {
