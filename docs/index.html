@@ -1363,10 +1363,10 @@ function attachEvents(){
   app.querySelectorAll('.nav-item').forEach(btn => {
     btn.onclick = async () => {
       state.screen = btn.dataset.nav;
-      if(state.screen === 'home'){ await refreshUser(); await loadTournaments(); }
+      if(state.screen === 'home'){ await Promise.all([refreshUser(), loadTournaments()]); }
       if(state.screen === 'history') await loadMyRegs();
       if(state.screen === 'leaderboard') await loadGlobalLeaderboard();
-      if(state.screen === 'profile'){ await refreshUser(); await loadMyTxns(); await loadMyStats(); }
+      if(state.screen === 'profile'){ await Promise.all([refreshUser(), loadMyTxns(), loadMyStats()]); }
       render();
     };
   });
@@ -1540,10 +1540,9 @@ async function setupPushNotifications(){
 /* ============== INIT ============== */
 (async function init(){
   if(state.token){
-    await refreshUser();
-    await loadTournaments();
-    await loadMyRegs();
-    await loadMyTxns();
+    state.loading = true;
+    render();
+    await Promise.all([refreshUser(), loadTournaments(), loadMyRegs(), loadMyTxns()]);
     setTimeout(setupPushNotifications, 1500);
   }
   render();
