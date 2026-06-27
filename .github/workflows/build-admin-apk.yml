@@ -1,0 +1,111 @@
+name: Build Admin APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'admin-apk-build/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install dependencies
+        working-directory: ./admin-apk-build
+        run: npm install
+
+      - name: Add Android platform
+        working-directory: ./admin-apk-build
+        run: npx cap add android || true
+
+      - name: Sync Capacitor plugins (registers push notifications natively)
+        working-directory: ./admin-apk-build
+        run: npx cap sync android
+
+      - name: Add notification permission to AndroidManifest
+        working-directory: ./admin-apk-build/android
+        run: |
+          sed -i '/<manifest/a\    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' app/src/main/AndroidManifest.xml
+
+      - name: Add google-services.json for Firebase
+        working-directory: ./admin-apk-build
+        run: cp firebase-config/google-services.json android/app/google-services.json
+
+      - name: Add Firebase Gradle plugin
+        working-directory: ./admin-apk-build/android
+        run: |
+          python3 << 'PYEOF'
+          import re
+
+          with open('build.gradle', 'r') as f:
+              content = f.read()
+
+          if 'com.google.gms:google-services' not in content:
+              match = re.search(r'(buildscript\s*\{.*?dependencies\s*\{)', content, re.DOTALL)
+              if match:
+                  insert_point = match.end()
+                  content = content[:insert_point] + "\n        classpath 'com.google.gms:google-services:4.4.2'" + content[insert_point:]
+              with open('build.gradle', 'w') as f:
+                  f.write(content)
+              print("Added google-services classpath to build.gradle")
+          else:
+              print("google-services classpath already present - skipping (avoids duplicate)")
+
+          with open('app/build.gradle', 'r') as f:
+              app_content = f.read()
+          if app_content.count("apply plugin: 'com.google.gms.google-services'") > 0:
+              print("app/build.gradle already applies google-services plugin conditionally - no action needed")
+          else:
+              with open('app/build.gradle', 'a') as f:
+                  f.write("\napply plugin: 'com.google.gms.google-services'\n")
+              print("Appended google-services plugin application")
+          PYEOF
+
+      - name: Generate app icons and splash screen
+        working-directory: ./admin-apk-build
+        run: |
+          npm install @capacitor/assets --save-dev
+          npx capacitor-assets generate --android
+
+      - name: Grant execute permission for gradlew
+        working-directory: ./admin-apk-build/android
+        run: chmod +x gradlew
+
+      - name: Decode release keystore
+        working-directory: ./admin-apk-build/android
+        run: |
+          echo "${{ secrets.ADMIN_RELEASE_KEYSTORE_BASE64 }}" | base64 -d > "$GITHUB_WORKSPACE/admin-apk-build/android/app/clashking-admin-release.keystore"
+
+      - name: Build Signed Release APK
+        working-directory: ./admin-apk-build/android
+        env:
+          RELEASE_STORE_PASSWORD: ${{ secrets.ADMIN_RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.ADMIN_RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.ADMIN_RELEASE_KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/admin-apk-build/android/app/clashking-admin-release.keystore" \
+            -Pandroid.injected.signing.store.password=$RELEASE_STORE_PASSWORD \
+            -Pandroid.injected.signing.key.alias=$RELEASE_KEY_ALIAS \
+            -Pandroid.injected.signing.key.password=$RELEASE_KEY_PASSWORD
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clashking-admin-apk
+          path: admin-apk-build/android/app/build/outputs/apk/release/app-release.apk
