@@ -33,6 +33,10 @@ jobs:
         working-directory: ./admin-apk-build
         run: npx cap add android || true
 
+      - name: Ensure assets directory exists
+        working-directory: ./admin-apk-build
+        run: mkdir -p android/app/src/main/assets/public
+
       - name: Sync Capacitor plugins (registers push notifications natively)
         working-directory: ./admin-apk-build
         run: npx cap sync android
