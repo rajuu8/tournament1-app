@@ -272,24 +272,28 @@ router.get('/cron/inactivity-reminder', async (req, res) => {
       role: 'player',
       fcmToken: { $ne: '' },
       lastLoginDate: { $lt: twoDaysAgo },
-    }).select('fcmToken loginStreak');
+    }).select('fcmToken loginStreak').limit(500); // cap to avoid huge batches
 
     let sent = 0;
     for (const user of inactiveUsers) {
-      sendPushNotification(
-        user.fcmToken,
-        '🔥 Don\'t lose your streak!',
-        user.loginStreak > 1
-          ? `You're on a ${user.loginStreak}-day streak. Login now before it resets!`
-          : 'New tournaments are live! Come check them out.',
-        { type: 'inactivity_reminder' }
-      );
-      sent++;
+      try {
+        await sendPushNotification(
+          user.fcmToken,
+          "🔥 Don't lose your streak!",
+          user.loginStreak > 1
+            ? `You're on a ${user.loginStreak}-day streak. Login now before it resets!`
+            : 'New tournaments are live! Come check them out.',
+          { type: 'inactivity_reminder' }
+        );
+        sent++;
+      } catch (notifErr) {
+        // Skip bad tokens, don't let one failure break the whole batch
+      }
     }
 
     res.json({ message: `Reminder sent to ${sent} inactive players` });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Cron job failed', error: String(err.message || err).slice(0, 200) });
   }
 });
 
