@@ -46,6 +46,33 @@ router.put('/settings/esewa', protect, adminOnly, async (req, res) => {
   }
 });
 
+// @route   GET /api/transactions/settings/min-withdrawal
+// @desc    Public - get the minimum withdrawal amount to show on withdraw screen
+router.get('/settings/min-withdrawal', async (req, res) => {
+  try {
+    const setting = await Settings.findOne({ key: 'minWithdrawal' });
+    res.json({ minWithdrawal: setting ? Number(setting.value) || 50 : 50 });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// @route   PUT /api/transactions/settings/min-withdrawal
+// @desc    Admin only - update the minimum withdrawal amount
+router.put('/settings/min-withdrawal', protect, adminOnly, async (req, res) => {
+  try {
+    const { minWithdrawal } = req.body;
+    const setting = await Settings.findOneAndUpdate(
+      { key: 'minWithdrawal' },
+      { value: String(minWithdrawal) },
+      { upsert: true, new: true }
+    );
+    res.json({ minWithdrawal: Number(setting.value) });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 /* ===================== DEPOSIT ===================== */
 
 // @route   POST /api/transactions/deposit
@@ -94,6 +121,12 @@ router.post('/withdraw', protect, async (req, res) => {
     }
     if (!receiverEsewaNumber) {
       return res.status(400).json({ message: 'eSewa number is required' });
+    }
+
+    const minSetting = await Settings.findOne({ key: 'minWithdrawal' });
+    const minWithdrawal = minSetting ? Number(minSetting.value) || 0 : 50; // default ₨50 if not set
+    if (amount < minWithdrawal) {
+      return res.status(400).json({ message: `Minimum withdrawal amount is ₨${minWithdrawal}` });
     }
 
     const user = await User.findById(req.user.id);

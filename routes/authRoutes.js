@@ -101,6 +101,12 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Invalid phone or password' });
     }
 
+    if (user.isBanned) {
+      return res.status(403).json({
+        message: `Your account has been banned${user.banReason ? `: ${user.banReason}` : '.'} Contact support if you believe this is a mistake.`,
+      });
+    }
+
     // Update daily login streak (only once per calendar day)
     const today = todayStr();
     let dailyBonusAwarded = false;
@@ -202,6 +208,12 @@ router.get('/me', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
     if (!user) return res.status(404).json({ message: 'User not found' });
+    if (user.isBanned) {
+      return res.status(403).json({
+        message: `Your account has been banned${user.banReason ? `: ${user.banReason}` : '.'} Contact support if you believe this is a mistake.`,
+        banned: true,
+      });
+    }
     res.json({ user });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -290,6 +302,58 @@ router.get('/my-stats', protect, async (req, res) => {
       },
     ]);
     res.json(stats[0] || { totalMatches: 0, totalKills: 0, totalWins: 0, totalEarnings: 0 });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// @route   GET /api/auth/admin/players
+// @desc    Admin views all players with basic stats, optional ?search=name/phone
+router.get('/admin/players', protect, adminOnly, async (req, res) => {
+  try {
+    const filter = { role: 'player' };
+    if (req.query.search) {
+      const re = new RegExp(req.query.search, 'i');
+      filter.$or = [{ name: re }, { phone: re }];
+    }
+    const players = await User.find(filter)
+      .select('name phone walletBalance isBanned banReason createdAt')
+      .sort({ createdAt: -1 })
+      .limit(200);
+    res.json(players);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// @route   PUT /api/auth/admin/players/:id/ban
+// @desc    Admin bans a player (they will be logged out and blocked on next request)
+router.put('/admin/players/:id/ban', protect, adminOnly, async (req, res) => {
+  try {
+    const { banReason } = req.body;
+    const player = await User.findByIdAndUpdate(
+      req.params.id,
+      { isBanned: true, banReason: banReason || '', bannedAt: new Date() },
+      { new: true }
+    ).select('name phone isBanned banReason');
+    if (!player) return res.status(404).json({ message: 'Player not found' });
+    res.json(player);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// @route   PUT /api/auth/admin/players/:id/unban
+// @desc    Admin unbans a player
+router.put('/admin/players/:id/unban', protect, adminOnly, async (req, res) => {
+  try {
+    const player = await User.findByIdAndUpdate(
+      req.params.id,
+      { isBanned: false, banReason: '', bannedAt: null },
+      { new: true }
+    ).select('name phone isBanned');
+    if (!player) return res.status(404).json({ message: 'Player not found' });
+    res.json(player);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }

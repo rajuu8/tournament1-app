@@ -212,6 +212,10 @@ let state = {
   conversationMessages: [],
   pendingChatImage: null,
   supportAdmins: [],
+  analytics: null,
+  players: [],
+  playerSearch: '',
+  minWithdrawal: 50,
 };
 
 function ls_get(k){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
@@ -262,7 +266,7 @@ function render(){
   if(!state.token){
     app.innerHTML = renderAuth();
   } else {
-    const defaultPage = state.user?.role === 'support-admin' ? 'support' : 'tournaments';
+    const defaultPage = state.user?.role === 'support-admin' ? 'support' : 'dashboard';
     app.innerHTML = `
       <div class="layout">
         ${renderSidebar()}
@@ -272,7 +276,10 @@ function render(){
         state.page === 'settings' ? renderSettingsPage() :
         state.page === 'support' ? renderSupportPage() :
         state.page === 'admins' ? renderAdminsPage() :
-        (state.user?.role === 'support-admin' ? renderSupportPage() : renderTournamentsPage())
+        state.page === 'players' ? renderPlayersPage() :
+        state.page === 'dashboard' ? renderDashboardPage() :
+        state.page === 'tournaments' ? renderTournamentsPage() :
+        (state.user?.role === 'support-admin' ? renderSupportPage() : renderDashboardPage())
       }</div>
       </div>
       ${renderModal()}
@@ -319,8 +326,10 @@ function renderSidebar(){
         <div class="sb-name">CLASH<span>KING</span><small>${state.user?.role === 'support-admin' ? 'SUPPORT ADMIN' : 'ADMIN PANEL'}</small></div>
       </div>
       ${state.user?.role !== 'support-admin' ? `
+        <button class="nav-link ${state.page==='dashboard'?'active':''}" data-page="dashboard"><i class="fa-solid fa-chart-line"></i> <span class="mobile-hide">Dashboard</span></button>
         <button class="nav-link ${state.page==='tournaments'?'active':''}" data-page="tournaments"><i class="fa-solid fa-trophy"></i> <span class="mobile-hide">Tournaments</span></button>
-        <button class="nav-link ${state.page==='registrations'?'active':''}" data-page="registrations"><i class="fa-solid fa-users"></i> <span class="mobile-hide">Players</span></button>
+        <button class="nav-link ${state.page==='registrations'?'active':''}" data-page="registrations"><i class="fa-solid fa-users"></i> <span class="mobile-hide">Registrations</span></button>
+        <button class="nav-link ${state.page==='players'?'active':''}" data-page="players"><i class="fa-solid fa-user-group"></i> <span class="mobile-hide">All Players</span></button>
         <button class="nav-link ${state.page==='transactions'?'active':''}" data-page="transactions"><i class="fa-solid fa-money-bill-transfer"></i> <span class="mobile-hide">Wallet Requests</span></button>
       ` : ''}
       <button class="nav-link ${state.page==='support'?'active':''}" data-page="support"><i class="fa-solid fa-headset"></i> <span class="mobile-hide">Support Chats</span></button>
@@ -331,6 +340,80 @@ function renderSidebar(){
       <div class="sidebar-bottom">
         <button class="nav-link logout-link" id="logoutBtn"><i class="fa-solid fa-right-from-bracket"></i> <span class="mobile-hide">Logout</span></button>
       </div>
+    </div>
+  `;
+}
+
+function renderDashboardPage(){
+  const a = state.analytics || {};
+  return `
+    <div class="topbar">
+      <div>
+        <div class="page-title">Dashboard</div>
+        <div class="page-sub">Business overview at a glance</div>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="si" style="background:var(--cyan-dim);color:var(--cyan)"><i class="fa-solid fa-users"></i></div><div class="sv">${a.totalPlayers ?? '—'}</div><div class="sl">Total Players</div></div>
+      <div class="stat-card"><div class="si" style="background:var(--flame-dim);color:var(--flame)"><i class="fa-solid fa-trophy"></i></div><div class="sv">${a.totalTournaments ?? '—'}</div><div class="sl">Total Tournaments</div></div>
+      <div class="stat-card"><div class="si" style="background:#3ddc8422;color:var(--success)"><i class="fa-solid fa-circle"></i></div><div class="sv">${a.liveTournaments ?? '—'}</div><div class="sl">Live Now</div></div>
+      <div class="stat-card"><div class="si" style="background:#ffc23c22;color:var(--gold)"><i class="fa-solid fa-user-check"></i></div><div class="sv">${a.totalRegistrations ?? '—'}</div><div class="sl">Total Registrations</div></div>
+    </div>
+
+    <div class="section-label-row"><h3 style="font-size:15px; color:var(--text-mid); margin:18px 0 10px;"><i class="fa-solid fa-money-bill-wave"></i> Money Flow</h3></div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="si" style="background:#3ddc8422;color:var(--success)"><i class="fa-solid fa-arrow-down"></i></div><div class="sv">₨${a.totalDeposited ?? 0}</div><div class="sl">Total Deposited</div></div>
+      <div class="stat-card"><div class="si" style="background:#ffc23c22;color:var(--gold)"><i class="fa-solid fa-arrow-up"></i></div><div class="sv">₨${a.totalWithdrawn ?? 0}</div><div class="sl">Total Withdrawn</div></div>
+      <div class="stat-card"><div class="si" style="background:var(--flame-dim);color:var(--flame)"><i class="fa-solid fa-gift"></i></div><div class="sv">₨${a.totalPrizesPaid ?? 0}</div><div class="sl">Total Prizes Paid</div></div>
+      <div class="stat-card"><div class="si" style="background:var(--cyan-dim);color:var(--cyan)"><i class="fa-solid fa-ticket"></i></div><div class="sv">₨${a.totalEntryFeesCollected ?? 0}</div><div class="sl">Entry Fees Collected</div></div>
+    </div>
+
+    <div class="panel" style="margin-top:18px;">
+      <div class="panel-head"><h3><i class="fa-solid fa-circle-info"></i> Quick Notes</h3></div>
+      <div style="padding:16px; font-size:12.5px; color:var(--text-mid); line-height:1.6;">
+        <p><strong>Entry Fees Collected</strong> is an estimate based on filled slots x entry fee per tournament, not actual verified payments.</p>
+        <p style="margin-top:8px;"><strong>Net position</strong> approx Entry Fees Collected minus Total Prizes Paid (your tournament margin).</p>
+      </div>
+    </div>
+  `;
+}
+
+function renderPlayersPage(){
+  return `
+    <div class="topbar">
+      <div>
+        <div class="page-title">All Players</div>
+        <div class="page-sub">Search, view, ban or unban player accounts</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3><i class="fa-solid fa-user-group"></i> Players</h3>
+        <input type="text" id="playerSearchInput" placeholder="Search by name or phone..." value="${state.playerSearch}" style="background:var(--bg-panel); border:1px solid var(--line); color:var(--text-hi); padding:7px 12px; border-radius:8px; font-size:12.5px; width:220px;">
+      </div>
+      <table>
+        <thead><tr><th>Name</th><th>Phone</th><th>Wallet</th><th>Status</th><th>Joined</th><th>Action</th></tr></thead>
+        <tbody>
+          ${state.players.length === 0 ? '<tr class="empty-row"><td colspan="6">No players found.</td></tr>' : ''}
+          ${state.players.map(p => `
+            <tr>
+              <td style="font-weight:700;">${p.name}</td>
+              <td>${p.phone}</td>
+              <td style="color:var(--gold); font-weight:700;">₨${p.walletBalance}</td>
+              <td>
+                ${p.isBanned ? `<span class="badge rejected">Banned</span>${p.banReason ? `<div style="font-size:10px; color:var(--text-low); margin-top:3px;">${p.banReason}</div>` : ''}` : `<span class="badge verified">Active</span>`}
+              </td>
+              <td style="font-size:12px; color:var(--text-mid);">${fmtDate(p.createdAt)}</td>
+              <td>
+                ${p.isBanned
+                  ? `<button class="btn btn-success btn-sm" data-unban="${p._id}"><i class="fa-solid fa-check"></i> Unban</button>`
+                  : `<button class="btn btn-danger btn-sm" data-ban="${p._id}" data-banname="${p.name}"><i class="fa-solid fa-ban"></i> Ban</button>`}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
     </div>
   `;
 }
@@ -347,7 +430,10 @@ function renderTournamentsPage(){
         <div class="page-title">Tournaments</div>
         <div class="page-sub">Create and manage Free Fire & PUBG tournaments</div>
       </div>
-      <button class="btn btn-primary" id="newTournamentBtn"><i class="fa-solid fa-plus"></i> New Tournament</button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-secondary" id="archiveOldBtn" title="Archive completed/cancelled tournaments older than 7 days"><i class="fa-solid fa-box-archive"></i> Archive Old</button>
+        <button class="btn btn-primary" id="newTournamentBtn"><i class="fa-solid fa-plus"></i> New Tournament</button>
+      </div>
     </div>
 
     <div class="stat-grid">
@@ -378,6 +464,7 @@ function renderTournamentsPage(){
                   <button class="btn btn-secondary btn-sm" data-action="banner" data-id="${t._id}"><i class="fa-solid fa-image"></i></button>
                   <button class="btn btn-secondary btn-sm" data-action="room" data-id="${t._id}"><i class="fa-solid fa-key"></i></button>
                   <button class="btn btn-secondary btn-sm" data-action="players" data-id="${t._id}"><i class="fa-solid fa-users"></i></button>
+                  <button class="btn btn-secondary btn-sm" data-action="archive" data-id="${t._id}" title="Archive"><i class="fa-solid fa-box-archive"></i></button>
                   <button class="btn btn-danger btn-sm" data-action="delete" data-id="${t._id}"><i class="fa-solid fa-trash"></i></button>
                 </div>
               </td>
@@ -491,6 +578,16 @@ function renderSettingsPage(){
         <div class="success-msg" id="settingsOk"></div>
         <div class="field"><label>Your eSewa Number (shown to players for deposits)</label><input type="tel" id="esewaInput" value="${state.esewaNumber || ''}" placeholder="98XXXXXXXX"></div>
         <button class="btn btn-primary" id="saveEsewaBtn"><i class="fa-solid fa-check"></i> Save</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3><i class="fa-solid fa-money-bill-wave"></i> Minimum Withdrawal</h3></div>
+      <div style="padding:18px;">
+        <div class="success-msg" id="settingsOk2"></div>
+        <div class="field"><label>Minimum amount players can withdraw (₨)</label><input type="number" id="minWithdrawalInput" value="${state.minWithdrawal || 50}" min="1"></div>
+        <p style="font-size:11.5px; color:var(--text-low); margin-bottom:14px;">Requests below this amount will be blocked. This reduces small/manual withdrawal overhead.</p>
+        <button class="btn btn-primary" id="saveMinWithdrawalBtn"><i class="fa-solid fa-check"></i> Save</button>
       </div>
     </div>
   `;
@@ -795,6 +892,26 @@ async function loadSupportAdmins(){
   }catch(e){ showToast(e.message, true); }
 }
 
+async function loadAnalytics(){
+  try{
+    state.analytics = await api('/tournaments/analytics/summary');
+  }catch(e){ showToast(e.message, true); }
+}
+
+async function loadPlayers(search){
+  try{
+    const q = search ? `?search=${encodeURIComponent(search)}` : '';
+    state.players = await api('/auth/admin/players' + q);
+  }catch(e){ showToast(e.message, true); }
+}
+
+async function loadMinWithdrawal(){
+  try{
+    const data = await api('/transactions/settings/min-withdrawal', 'GET', null, false);
+    state.minWithdrawal = data.minWithdrawal;
+  }catch(e){ /* silent */ }
+}
+
 /* ============ EVENTS ============ */
 function attachEvents(){
   const app = document.getElementById('app');
@@ -817,7 +934,8 @@ function attachEvents(){
         state.page = 'support';
         await loadConversations();
       } else {
-        await loadTournaments();
+        state.page = 'dashboard';
+        await loadAnalytics();
       }
       render();
       setTimeout(setupPushNotifications, 1500);
@@ -844,10 +962,53 @@ function attachEvents(){
     btn.onclick = async () => {
       state.page = btn.dataset.page;
       if(state.page === 'transactions') await loadTransactions('Pending');
-      if(state.page === 'settings') await loadEsewaSetting();
+      if(state.page === 'settings'){ await loadEsewaSetting(); await loadMinWithdrawal(); }
       if(state.page === 'support'){ state.activeConversation = null; await loadConversations(); }
       if(state.page === 'admins') await loadSupportAdmins();
+      if(state.page === 'dashboard') await loadAnalytics();
+      if(state.page === 'players') await loadPlayers(state.playerSearch);
       render();
+    };
+  });
+
+  // Player search
+  const playerSearchInput = document.getElementById('playerSearchInput');
+  if(playerSearchInput){
+    let searchTimer;
+    playerSearchInput.oninput = () => {
+      state.playerSearch = playerSearchInput.value;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(async () => {
+        await loadPlayers(state.playerSearch);
+        render();
+        document.getElementById('playerSearchInput')?.focus();
+      }, 400);
+    };
+  }
+
+  // Ban player
+  app.querySelectorAll('[data-ban]').forEach(btn => {
+    btn.onclick = async () => {
+      const reason = prompt(`Reason for banning ${btn.dataset.banname} (optional):`);
+      if(reason === null) return; // cancelled
+      try{
+        await api('/auth/admin/players/' + btn.dataset.ban + '/ban', 'PUT', { banReason: reason });
+        showToast('Player banned');
+        await loadPlayers(state.playerSearch);
+        render();
+      }catch(e){ showToast(e.message, true); }
+    };
+  });
+
+  // Unban player
+  app.querySelectorAll('[data-unban]').forEach(btn => {
+    btn.onclick = async () => {
+      try{
+        await api('/auth/admin/players/' + btn.dataset.unban + '/unban', 'PUT');
+        showToast('Player unbanned');
+        await loadPlayers(state.playerSearch);
+        render();
+      }catch(e){ showToast(e.message, true); }
     };
   });
 
@@ -1032,6 +1193,26 @@ function attachEvents(){
     };
   });
 
+  app.querySelectorAll('[data-action="archive"]').forEach(btn => {
+    btn.onclick = async () => {
+      try{
+        await api('/tournaments/' + btn.dataset.id + '/archive', 'PUT', { isArchived: true });
+        showToast('Tournament archived');
+        await loadTournaments();
+      }catch(e){ showToast(e.message, true); }
+    };
+  });
+
+  const archiveOldBtn = document.getElementById('archiveOldBtn');
+  if(archiveOldBtn) archiveOldBtn.onclick = async () => {
+    if(!confirm('Archive all completed/cancelled tournaments older than 7 days?')) return;
+    try{
+      const result = await api('/tournaments/archive-old', 'POST');
+      showToast(result.message);
+      await loadTournaments();
+    }catch(e){ showToast(e.message, true); }
+  };
+
   const saveRoomBtn = document.getElementById('saveRoomBtn');
   if(saveRoomBtn) saveRoomBtn.onclick = async () => {
     const t = state.activeTournament;
@@ -1119,6 +1300,18 @@ function attachEvents(){
       if(ok){ ok.textContent = 'Saved successfully'; ok.style.display='block'; }
     }catch(e){ showToast(e.message, true); }
   };
+
+  const saveMinWithdrawalBtn = document.getElementById('saveMinWithdrawalBtn');
+  if(saveMinWithdrawalBtn) saveMinWithdrawalBtn.onclick = async () => {
+    const minWithdrawal = Number(document.getElementById('minWithdrawalInput').value);
+    try{
+      await api('/transactions/settings/min-withdrawal', 'PUT', { minWithdrawal });
+      state.minWithdrawal = minWithdrawal;
+      showToast('Minimum withdrawal updated! ✅');
+      const ok = document.getElementById('settingsOk2');
+      if(ok){ ok.textContent = 'Saved successfully'; ok.style.display='block'; }
+    }catch(e){ showToast(e.message, true); }
+  };
 }
 
 /* ============ INIT ============ */
@@ -1173,7 +1366,8 @@ async function setupPushNotifications(){
       state.page = 'support';
       await loadConversations();
     } else {
-      await loadTournaments();
+      state.page = 'dashboard';
+      await loadAnalytics();
     }
     setTimeout(setupPushNotifications, 1500);
   }

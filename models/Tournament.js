@@ -25,6 +25,8 @@ const tournamentSchema = new mongoose.Schema(
     },
     bannerImage: { type: String, default: '' }, // Cloudinary URL, shown on tournament card
     description: { type: String, default: '' },
+    isArchived: { type: Boolean, default: false }, // hides old completed/cancelled tournaments from the main list
+    reminderSent: { type: Boolean, default: false }, // tracks whether the pre-match reminder push was already sent
   },
   { timestamps: true }
 );

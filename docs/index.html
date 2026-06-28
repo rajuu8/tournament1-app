@@ -423,6 +423,7 @@ let state = {
   showRulesModal: false,
   pendingChatImage: null, // File object selected but not yet sent
   esewaNumber: '',
+  minWithdrawal: 50,
   walletModal: null, // null | 'deposit' | 'withdraw'
   loading: false,
   loadError: null,
@@ -1005,7 +1006,7 @@ function renderWalletModal(){
               <div class="rb-title">Available Balance</div>
               <div style="font-family:'Saira Condensed'; font-size:24px; font-weight:800; color:var(--success);">₨${state.user?.walletBalance || 0}</div>
             </div>
-            <div class="field"><label>Amount to Withdraw (₨)</label><input type="number" id="wdAmount" placeholder="500"></div>
+            <div class="field"><label>Amount to Withdraw (₨) <span style="color:var(--text-low); text-transform:none; font-weight:600;">— min ₨${state.minWithdrawal || 50}</span></label><input type="number" id="wdAmount" placeholder="${state.minWithdrawal || 50}" min="${state.minWithdrawal || 50}"></div>
             <div class="field"><label>Your eSewa Number (to receive money)</label><input type="tel" id="wdReceiverNumber" placeholder="98XXXXXXXX"></div>
             <button class="primary-btn" id="submitWithdrawBtn"><i class="fa-solid fa-check"></i> Request Withdrawal</button>
             <p style="font-size:11.5px; color:var(--text-low); margin-top:10px; text-align:center;">Amount will be deducted now and sent to your eSewa within 24 hours.</p>
@@ -1155,7 +1156,13 @@ async function refreshUser(){
     const data = await api('/auth/me');
     state.user = data.user;
     localStorage_set('user', data.user);
-  }catch(e){ /* silent */ }
+  }catch(e){
+    if(e.message && e.message.toLowerCase().includes('banned')){
+      localStorage_clear();
+      state.token = null; state.user = null; state.screen = 'login';
+      showToast(e.message, true);
+    }
+  }
 }
 
 async function loadMyStats(){
@@ -1176,6 +1183,13 @@ async function loadEsewaNumber(){
   try{
     const data = await api('/transactions/settings/esewa', 'GET', null, false);
     state.esewaNumber = data.esewaNumber;
+  }catch(e){ /* silent */ }
+}
+
+async function loadMinWithdrawal(){
+  try{
+    const data = await api('/transactions/settings/min-withdrawal', 'GET', null, false);
+    state.minWithdrawal = data.minWithdrawal;
   }catch(e){ /* silent */ }
 }
 
@@ -1453,7 +1467,7 @@ function attachEvents(){
     state.walletModal = 'deposit'; render();
   };
   const withdrawBtn = document.getElementById('withdrawBtn');
-  if(withdrawBtn) withdrawBtn.onclick = () => { state.walletModal = 'withdraw'; render(); };
+  if(withdrawBtn) withdrawBtn.onclick = async () => { await loadMinWithdrawal(); state.walletModal = 'withdraw'; render(); };
 
   const closeWalletModal = document.getElementById('closeWalletModal');
   if(closeWalletModal) closeWalletModal.onclick = () => { state.walletModal = null; render(); };

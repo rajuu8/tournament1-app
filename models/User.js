@@ -20,6 +20,10 @@ const userSchema = new mongoose.Schema(
     loginStreak: { type: Number, default: 0 },
 
     fcmToken: { type: String, default: '' }, // Firebase Cloud Messaging token for push notifications
+
+    isBanned: { type: Boolean, default: false },
+    banReason: { type: String, default: '' },
+    bannedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
