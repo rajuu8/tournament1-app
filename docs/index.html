@@ -422,6 +422,7 @@ let state = {
   showFaq: false,
   showRulesModal: false,
   pendingChatImage: null, // File object selected but not yet sent
+  chatPollInterval: null,
   esewaNumber: '',
   minWithdrawal: 50,
   walletModal: null, // null | 'deposit' | 'withdraw'
@@ -523,7 +524,7 @@ function fmtDate(d){
 function render(){
   const app = document.getElementById('app');
   if(!state.token){
-    app.innerHTML = state.screen === 'signup' ? renderSignup() : renderLogin();
+    app.innerHTML = state.screen === 'signup' ? renderSignup() : (state.screen === 'guestSupport' ? renderGuestSupport() : renderLogin());
   } else if(state.showSupportChat){
     app.innerHTML = renderSupportChat();
   } else if(state.showFaq){
@@ -581,6 +582,7 @@ function renderLogin(){
       <div class="field"><label>Password</label><input type="password" id="password" placeholder="••••••••"></div>
       <button class="primary-btn" id="loginBtn"><i class="fa-solid fa-bolt"></i> Login</button>
       <div class="switch-link">New here? <a id="goSignup">Create Account</a></div>
+      <div class="switch-link" style="margin-top:8px;">Trouble logging in? <a id="goGuestSupport">Get Help</a></div>
     </div>
   `;
 }
@@ -602,6 +604,26 @@ function renderSignup(){
       <div class="field"><label>Referral Code <span style="color:var(--text-low); text-transform:none; font-weight:600;">(optional)</span></label><input type="text" id="referralCode" placeholder="Friend's code, if any" style="text-transform:uppercase;"></div>
       <button class="primary-btn" id="signupBtn"><i class="fa-solid fa-user-plus"></i> Create Account</button>
       <div class="switch-link">Already have an account? <a id="goLogin">Login</a></div>
+    </div>
+  `;
+}
+
+function renderGuestSupport(){
+  return `
+    <div class="auth-screen">
+      <div class="auth-logo">
+        <div class="brand-mark"><i class="fa-solid fa-headset"></i></div>
+        <h1>Need <span style="color:var(--flame)">Help?</span></h1>
+        <p>Can't log in? Tell us what's wrong and we'll get back to you.</p>
+      </div>
+      <div class="error-msg" id="err"></div>
+      <div class="success-msg" id="guestOk" style="display:none;"></div>
+      <div class="field"><label>Your Name</label><input type="text" id="guestName" placeholder="Your name"></div>
+      <div class="field"><label>Phone Number</label><input type="tel" id="guestPhone" placeholder="98XXXXXXXX"></div>
+      <div class="field"><label>What's the issue?</label><textarea id="guestMessage" rows="4" placeholder="Describe your problem (e.g. account banned, forgot password, can't login)..." style="width:100%; background:var(--bg-card); border:1px solid var(--line); border-radius:10px; padding:13px 14px; color:var(--text-hi); font-family:'Rajdhani'; font-size:15px; resize:vertical;"></textarea></div>
+      <div class="field"><label>Attach Screenshot <span style="color:var(--text-low); text-transform:none; font-weight:600;">(optional)</span></label><input type="file" id="guestImageInput" accept="image/*"></div>
+      <button class="primary-btn" id="submitGuestTicketBtn"><i class="fa-solid fa-paper-plane"></i> Submit Request</button>
+      <div class="switch-link">Remembered your password? <a id="goLoginFromGuest">Back to Login</a></div>
     </div>
   `;
 }
@@ -1179,6 +1201,33 @@ async function loadSupportMessages(){
   }catch(e){ /* silent */ }
 }
 
+// Silently refreshes messages and re-renders only if something new arrived (avoids disrupting typing)
+async function pollSupportMessages(){
+  if(!state.token || !state.showSupportChat) return;
+  try{
+    const fresh = await api('/support/my');
+    const changed = fresh.length !== state.supportMessages.length;
+    state.supportMessages = fresh;
+    if(changed){
+      render();
+      const box = document.getElementById('chatMessages');
+      if(box) box.scrollTop = box.scrollHeight;
+    }
+  }catch(e){ /* silent - don't disrupt the user with polling errors */ }
+}
+
+function startChatPolling(){
+  stopChatPolling(); // clear any existing interval first
+  state.chatPollInterval = setInterval(pollSupportMessages, 3000);
+}
+
+function stopChatPolling(){
+  if(state.chatPollInterval){
+    clearInterval(state.chatPollInterval);
+    state.chatPollInterval = null;
+  }
+}
+
 async function loadEsewaNumber(){
   try{
     const data = await api('/transactions/settings/esewa', 'GET', null, false);
@@ -1230,6 +1279,49 @@ function attachEvents(){
   if(goSignup) goSignup.onclick = () => { state.screen = 'signup'; render(); };
   const goLogin = document.getElementById('goLogin');
   if(goLogin) goLogin.onclick = () => { state.screen = 'login'; render(); };
+  const goGuestSupport = document.getElementById('goGuestSupport');
+  if(goGuestSupport) goGuestSupport.onclick = () => { state.screen = 'guestSupport'; render(); };
+  const goLoginFromGuest = document.getElementById('goLoginFromGuest');
+  if(goLoginFromGuest) goLoginFromGuest.onclick = () => { state.screen = 'login'; render(); };
+
+  const submitGuestTicketBtn = document.getElementById('submitGuestTicketBtn');
+  if(submitGuestTicketBtn) submitGuestTicketBtn.onclick = async () => {
+    const name = document.getElementById('guestName').value.trim();
+    const phone = document.getElementById('guestPhone').value.trim();
+    const message = document.getElementById('guestMessage').value.trim();
+    const imageInput = document.getElementById('guestImageInput');
+    const errBox = document.getElementById('err');
+    const okBox = document.getElementById('guestOk');
+    errBox.style.display = 'none'; okBox.style.display = 'none';
+
+    if(!name || !phone || !message){
+      errBox.textContent = 'Name, phone, and message are required';
+      errBox.style.display = 'block';
+      return;
+    }
+
+    submitGuestTicketBtn.disabled = true;
+    const originalHtml = submitGuestTicketBtn.innerHTML;
+    submitGuestTicketBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending...';
+    try{
+      const formData = new FormData();
+      formData.append('name', name);
+      formData.append('phone', phone);
+      formData.append('message', message);
+      if(imageInput.files[0]) formData.append('image', imageInput.files[0]);
+      await apiUpload('/support/guest-ticket', formData);
+      okBox.textContent = "Request submitted! We'll get back to you soon.";
+      okBox.style.display = 'block';
+      document.getElementById('guestName').value = '';
+      document.getElementById('guestPhone').value = '';
+      document.getElementById('guestMessage').value = '';
+      imageInput.value = '';
+    }catch(e){
+      errBox.textContent = e.message; errBox.style.display = 'block';
+    }
+    submitGuestTicketBtn.disabled = false;
+    submitGuestTicketBtn.innerHTML = originalHtml;
+  };
 
   const loginBtn = document.getElementById('loginBtn');
   if(loginBtn) loginBtn.onclick = async () => {
@@ -1411,9 +1503,13 @@ function attachEvents(){
   if(openSupportBtn) openSupportBtn.onclick = async () => {
     state.showSupportChat = true; render();
     await loadSupportMessages(); render();
+    startChatPolling();
   };
   const closeSupportBtn = document.getElementById('closeSupportBtn');
-  if(closeSupportBtn) closeSupportBtn.onclick = () => { state.showSupportChat = false; state.pendingChatImage = null; render(); };
+  if(closeSupportBtn) closeSupportBtn.onclick = () => {
+    stopChatPolling();
+    state.showSupportChat = false; state.pendingChatImage = null; render();
+  };
 
   // Support chat: attach image
   const chatAttachBtn = document.getElementById('chatAttachBtn');

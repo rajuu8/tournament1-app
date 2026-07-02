@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const SupportMessage = require('../models/SupportMessage');
+const GuestSupportTicket = require('../models/GuestSupportTicket');
 const User = require('../models/User');
 const { protect, anyAdmin } = require('../middleware/authMiddleware');
 const { sendPushNotification, sendPushToMany } = require('../config/firebase');
@@ -9,6 +10,74 @@ const { uploadImage } = require('../config/cloudinary');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 const router = express.Router();
+
+/* ===================== GUEST SUPPORT (no login required) ===================== */
+
+// @route   POST /api/support/guest-ticket
+// @desc    A person who can't log in (banned, locked out, etc.) submits a help request.
+//          No auth required since they may not be able to log in at all.
+router.post('/guest-ticket', upload.single('image'), async (req, res) => {
+  try {
+    const { name, phone, message } = req.body;
+    if (!name || !phone || !message) {
+      return res.status(400).json({ message: 'Name, phone, and message are required' });
+    }
+
+    let imageUrl = '';
+    if (req.file) {
+      imageUrl = await uploadImage(req.file.buffer, 'clashking-support');
+    }
+
+    const ticket = await GuestSupportTicket.create({ name, phone, message, imageUrl });
+
+    // Notify admins of a new guest ticket
+    const admins = await User.find({
+      role: { $in: ['admin', 'support-admin'] },
+      fcmToken: { $ne: '' },
+    }).select('fcmToken');
+    const tokens = admins.map(a => a.fcmToken).filter(Boolean);
+    sendPushToMany(
+      tokens,
+      '🆘 Login Help Request',
+      `${name} (${phone}) needs help logging in.`,
+      { type: 'guest_ticket' }
+    );
+
+    res.status(201).json(ticket);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// @route   GET /api/support/guest-tickets
+// @desc    Admin views all guest tickets, optional ?status=Open filter
+router.get('/guest-tickets', protect, anyAdmin, async (req, res) => {
+  try {
+    const filter = {};
+    if (req.query.status) filter.status = req.query.status;
+    const tickets = await GuestSupportTicket.find(filter).sort({ createdAt: -1 });
+    res.json(tickets);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// @route   PUT /api/support/guest-tickets/:id
+// @desc    Admin replies to / resolves a guest ticket
+router.put('/guest-tickets/:id', protect, anyAdmin, async (req, res) => {
+  try {
+    const { adminReply, status } = req.body;
+    const ticket = await GuestSupportTicket.findByIdAndUpdate(
+      req.params.id,
+      { adminReply, status: status || 'Resolved' },
+      { new: true }
+    );
+    if (!ticket) return res.status(404).json({ message: 'Ticket not found' });
+    res.json(ticket);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
 
 /* ===================== PLAYER SIDE ===================== */
 

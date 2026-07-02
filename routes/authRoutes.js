@@ -359,4 +359,105 @@ router.put('/admin/players/:id/unban', protect, adminOnly, async (req, res) => {
   }
 });
 
+// @route   PUT /api/auth/admin/players/:id/wallet
+// @desc    Admin manually corrects a player's wallet balance. Every change is logged for audit purposes.
+router.put('/admin/players/:id/wallet', protect, adminOnly, async (req, res) => {
+  try {
+    const { newBalance, reason } = req.body;
+    if (newBalance === undefined || isNaN(Number(newBalance)) || Number(newBalance) < 0) {
+      return res.status(400).json({ message: 'Enter a valid wallet balance' });
+    }
+
+    const player = await User.findById(req.params.id);
+    if (!player) return res.status(404).json({ message: 'Player not found' });
+
+    const previousBalance = player.walletBalance;
+    const newBal = Number(newBalance);
+
+    const WalletAdjustment = require('../models/WalletAdjustment');
+    await WalletAdjustment.create({
+      user: player._id,
+      adjustedBy: req.user.id,
+      previousBalance,
+      newBalance: newBal,
+      difference: newBal - previousBalance,
+      reason: reason || '',
+    });
+
+    player.walletBalance = newBal;
+    await player.save();
+
+    res.json({ name: player.name, phone: player.phone, walletBalance: player.walletBalance });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// @route   GET /api/auth/admin/players/:id/wallet-history
+// @desc    Admin views the audit log of manual wallet edits for a specific player
+router.get('/admin/players/:id/wallet-history', protect, adminOnly, async (req, res) => {
+  try {
+    const WalletAdjustment = require('../models/WalletAdjustment');
+    const history = await WalletAdjustment.find({ user: req.params.id })
+      .populate('adjustedBy', 'name')
+      .sort({ createdAt: -1 });
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// @route   GET /api/auth/admin/suspicious-activity
+// @desc    Admin views players flagged for potentially suspicious patterns:
+//          - Wallet balance grew unusually fast in the last 24 hours
+//          - Multiple accounts referencing the same device/IP isn't tracked here (not collected),
+//            but rapid referral chains from one referrer are flagged.
+router.get('/admin/suspicious-activity', protect, adminOnly, async (req, res) => {
+  try {
+    const Registration = require('../models/Registration');
+    const Transaction = require('../models/Transaction');
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    // Flag 1: Players whose prize winnings in the last 24h are unusually high (top 10)
+    const bigWinners = await Registration.aggregate([
+      { $match: { updatedAt: { $gte: dayAgo }, prizeWon: { $gt: 0 } } },
+      { $group: { _id: '$user', totalWon24h: { $sum: '$prizeWon' }, matches: { $sum: 1 } } },
+      { $match: { totalWon24h: { $gte: 500 } } }, // threshold - tune as needed
+      { $sort: { totalWon24h: -1 } },
+      { $limit: 20 },
+    ]);
+    const winnerIds = bigWinners.map(w => w._id);
+    const winnerUsers = await User.find({ _id: { $in: winnerIds } }).select('name phone walletBalance');
+    const winnerMap = {};
+    winnerUsers.forEach(u => { winnerMap[u._id.toString()] = u; });
+    const flaggedWinners = bigWinners.map(w => ({
+      user: winnerMap[w._id.toString()],
+      totalWon24h: w.totalWon24h,
+      matches: w.matches,
+      reason: `Won ₨${w.totalWon24h} across ${w.matches} match(es) in the last 24 hours`,
+    }));
+
+    // Flag 2: Referrers with an unusually high number of referrals in the last 24h (possible fake-account farming)
+    const heavyReferrers = await User.aggregate([
+      { $match: { referredBy: { $ne: null }, createdAt: { $gte: dayAgo } } },
+      { $group: { _id: '$referredBy', newReferrals24h: { $sum: 1 } } },
+      { $match: { newReferrals24h: { $gte: 5 } } }, // threshold - tune as needed
+      { $sort: { newReferrals24h: -1 } },
+    ]);
+    const referrerIds = heavyReferrers.map(r => r._id);
+    const referrerUsers = await User.find({ _id: { $in: referrerIds } }).select('name phone walletBalance');
+    const referrerMap = {};
+    referrerUsers.forEach(u => { referrerMap[u._id.toString()] = u; });
+    const flaggedReferrers = heavyReferrers.map(r => ({
+      user: referrerMap[r._id.toString()],
+      newReferrals24h: r.newReferrals24h,
+      reason: `Referred ${r.newReferrals24h} new accounts in the last 24 hours`,
+    }));
+
+    res.json({ flaggedWinners, flaggedReferrers });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 module.exports = router;

@@ -216,6 +216,9 @@ let state = {
   players: [],
   playerSearch: '',
   minWithdrawal: 50,
+  editingPlayer: null,
+  guestTickets: [],
+  suspiciousActivity: null,
 };
 
 function ls_get(k){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
@@ -275,6 +278,7 @@ function render(){
         state.page === 'transactions' ? renderTransactionsPage() :
         state.page === 'settings' ? renderSettingsPage() :
         state.page === 'support' ? renderSupportPage() :
+        state.page === 'guestTickets' ? renderGuestTicketsPage() :
         state.page === 'admins' ? renderAdminsPage() :
         state.page === 'players' ? renderPlayersPage() :
         state.page === 'dashboard' ? renderDashboardPage() :
@@ -333,6 +337,7 @@ function renderSidebar(){
         <button class="nav-link ${state.page==='transactions'?'active':''}" data-page="transactions"><i class="fa-solid fa-money-bill-transfer"></i> <span class="mobile-hide">Wallet Requests</span></button>
       ` : ''}
       <button class="nav-link ${state.page==='support'?'active':''}" data-page="support"><i class="fa-solid fa-headset"></i> <span class="mobile-hide">Support Chats</span></button>
+      <button class="nav-link ${state.page==='guestTickets'?'active':''}" data-page="guestTickets"><i class="fa-solid fa-circle-question"></i> <span class="mobile-hide">Login Help Tickets</span></button>
       ${state.user?.role !== 'support-admin' ? `
         <button class="nav-link ${state.page==='admins'?'active':''}" data-page="admins"><i class="fa-solid fa-user-shield"></i> <span class="mobile-hide">Manage Admins</span></button>
         <button class="nav-link ${state.page==='settings'?'active':''}" data-page="settings"><i class="fa-solid fa-gear"></i> <span class="mobile-hide">Settings</span></button>
@@ -376,6 +381,75 @@ function renderDashboardPage(){
         <p style="margin-top:8px;"><strong>Net position</strong> approx Entry Fees Collected minus Total Prizes Paid (your tournament margin).</p>
       </div>
     </div>
+
+    <div class="section-label-row"><h3 style="font-size:15px; color:var(--danger); margin:18px 0 10px;"><i class="fa-solid fa-triangle-exclamation"></i> Suspicious Activity (Last 24h)</h3></div>
+    <div class="panel">
+      <div class="panel-head"><h3><i class="fa-solid fa-trophy"></i> Unusually Large Winnings</h3></div>
+      <table>
+        <thead><tr><th>Player</th><th>Phone</th><th>Won (24h)</th><th>Matches</th><th>Wallet</th></tr></thead>
+        <tbody>
+          ${!state.suspiciousActivity || state.suspiciousActivity.flaggedWinners.length === 0 ? '<tr class="empty-row"><td colspan="5">Nothing flagged - looks clean.</td></tr>' : ''}
+          ${(state.suspiciousActivity?.flaggedWinners || []).map(f => `
+            <tr>
+              <td style="font-weight:700;">${f.user?.name || 'Unknown'}</td>
+              <td>${f.user?.phone || '-'}</td>
+              <td style="color:var(--danger); font-weight:700;">₨${f.totalWon24h}</td>
+              <td>${f.matches}</td>
+              <td style="color:var(--gold);">₨${f.user?.walletBalance ?? '-'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3><i class="fa-solid fa-user-group"></i> Unusually High Referral Activity</h3></div>
+      <table>
+        <thead><tr><th>Referrer</th><th>Phone</th><th>New Referrals (24h)</th><th>Wallet</th></tr></thead>
+        <tbody>
+          ${!state.suspiciousActivity || state.suspiciousActivity.flaggedReferrers.length === 0 ? '<tr class="empty-row"><td colspan="4">Nothing flagged - looks clean.</td></tr>' : ''}
+          ${(state.suspiciousActivity?.flaggedReferrers || []).map(f => `
+            <tr>
+              <td style="font-weight:700;">${f.user?.name || 'Unknown'}</td>
+              <td>${f.user?.phone || '-'}</td>
+              <td style="color:var(--danger); font-weight:700;">${f.newReferrals24h}</td>
+              <td style="color:var(--gold);">₨${f.user?.walletBalance ?? '-'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderGuestTicketsPage(){
+  return `
+    <div class="topbar">
+      <div>
+        <div class="page-title">Login Help Tickets</div>
+        <div class="page-sub">Requests from people who couldn't log in (banned, locked out, etc.)</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3><i class="fa-solid fa-circle-question"></i> Tickets</h3></div>
+      <table>
+        <thead><tr><th>Name</th><th>Phone</th><th>Message</th><th>Screenshot</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody>
+          ${state.guestTickets.length === 0 ? '<tr class="empty-row"><td colspan="6">No login help tickets.</td></tr>' : ''}
+          ${state.guestTickets.map(t => `
+            <tr>
+              <td style="font-weight:700;">${t.name}</td>
+              <td>${t.phone}</td>
+              <td style="max-width:260px; font-size:12px; color:var(--text-mid);">${t.message}</td>
+              <td>${t.imageUrl ? `<a href="${t.imageUrl}" target="_blank"><img src="${t.imageUrl}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid var(--line);"></a>` : '—'}</td>
+              <td><span class="badge ${t.status==='Resolved'?'verified':'pending'}">${t.status}</span></td>
+              <td>
+                ${t.status === 'Open' ? `<button class="btn btn-success btn-sm" data-resolveticket="${t._id}"><i class="fa-solid fa-check"></i> Mark Resolved</button>` : `<span style="font-size:11px; color:var(--text-low);">${t.adminReply || '-'}</span>`}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
   `;
 }
 
@@ -406,9 +480,12 @@ function renderPlayersPage(){
               </td>
               <td style="font-size:12px; color:var(--text-mid);">${fmtDate(p.createdAt)}</td>
               <td>
-                ${p.isBanned
-                  ? `<button class="btn btn-success btn-sm" data-unban="${p._id}"><i class="fa-solid fa-check"></i> Unban</button>`
-                  : `<button class="btn btn-danger btn-sm" data-ban="${p._id}" data-banname="${p.name}"><i class="fa-solid fa-ban"></i> Ban</button>`}
+                <div style="display:flex; gap:6px;">
+                  <button class="btn btn-secondary btn-sm" data-editwallet="${p._id}" data-wname="${p.name}" data-wbalance="${p.walletBalance}" title="Edit Wallet"><i class="fa-solid fa-pen"></i></button>
+                  ${p.isBanned
+                    ? `<button class="btn btn-success btn-sm" data-unban="${p._id}"><i class="fa-solid fa-check"></i> Unban</button>`
+                    : `<button class="btn btn-danger btn-sm" data-ban="${p._id}" data-banname="${p.name}"><i class="fa-solid fa-ban"></i> Ban</button>`}
+                </div>
               </td>
             </tr>
           `).join('')}
@@ -681,6 +758,25 @@ function renderAdminsPage(){
 function renderModal(){
   if(!state.modal) return '';
 
+  if(state.modal === 'editWallet'){
+    const p = state.editingPlayer;
+    return `
+      <div class="modal-overlay show">
+        <div class="modal">
+          <div class="modal-head"><h3><i class="fa-solid fa-wallet"></i> Edit Wallet — ${p?.name}</h3><button class="modal-close" id="closeModal">✕</button></div>
+          <div class="modal-body">
+            <div class="error-msg" id="err"></div>
+            <div class="field"><label>Current Balance</label><input type="text" value="₨${p?.walletBalance}" disabled style="opacity:0.6;"></div>
+            <div class="field"><label>New Balance (₨)</label><input type="number" id="newWalletBalance" value="${p?.walletBalance}" min="0"></div>
+            <div class="field"><label>Reason for change <span style="color:var(--text-low); text-transform:none; font-weight:600;">(required, for audit log)</span></label><textarea id="walletEditReason" rows="2" placeholder="e.g. correcting duplicate deposit credit" style="width:100%; background:var(--bg-card); border:1px solid var(--line); border-radius:9px; padding:11px 13px; color:var(--text-hi); font-family:'Rajdhani'; font-size:14px;"></textarea></div>
+            <p style="font-size:11px; color:var(--text-low); margin-bottom:14px;">This change is logged with your admin account, the time, and the reason. Use this only to correct genuine errors.</p>
+            <button class="btn btn-primary" id="saveWalletEditBtn" style="width:100%; justify-content:center;"><i class="fa-solid fa-check"></i> Save Change</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   if(state.modal === 'newSupportAdmin'){
     return `
       <div class="modal-overlay show">
@@ -886,6 +982,29 @@ async function loadConversationMessages(userId){
   }catch(e){ showToast(e.message, true); }
 }
 
+async function pollAdminConversation(){
+  if(!state.activeConversation) return;
+  try{
+    const fresh = await api('/support/conversations/' + state.activeConversation.userId);
+    const changed = fresh.length !== state.conversationMessages.length;
+    state.conversationMessages = fresh;
+    if(changed){
+      render();
+      const box = document.getElementById('adminChatMessages');
+      if(box) box.scrollTop = box.scrollHeight;
+    }
+  }catch(e){ /* silent */ }
+}
+
+let adminChatPollInterval = null;
+function startAdminChatPolling(){
+  stopAdminChatPolling();
+  adminChatPollInterval = setInterval(pollAdminConversation, 3000);
+}
+function stopAdminChatPolling(){
+  if(adminChatPollInterval){ clearInterval(adminChatPollInterval); adminChatPollInterval = null; }
+}
+
 async function loadSupportAdmins(){
   try{
     state.supportAdmins = await api('/auth/admin/support-admins');
@@ -895,6 +1014,18 @@ async function loadSupportAdmins(){
 async function loadAnalytics(){
   try{
     state.analytics = await api('/tournaments/analytics/summary');
+  }catch(e){ showToast(e.message, true); }
+}
+
+async function loadSuspiciousActivity(){
+  try{
+    state.suspiciousActivity = await api('/auth/admin/suspicious-activity');
+  }catch(e){ /* silent - non-critical panel */ }
+}
+
+async function loadGuestTickets(){
+  try{
+    state.guestTickets = await api('/support/guest-tickets');
   }catch(e){ showToast(e.message, true); }
 }
 
@@ -936,6 +1067,7 @@ function attachEvents(){
       } else {
         state.page = 'dashboard';
         await loadAnalytics();
+        await loadSuspiciousActivity();
       }
       render();
       setTimeout(setupPushNotifications, 1500);
@@ -960,12 +1092,14 @@ function attachEvents(){
   // Sidebar nav
   app.querySelectorAll('[data-page]').forEach(btn => {
     btn.onclick = async () => {
+      stopAdminChatPolling();
       state.page = btn.dataset.page;
       if(state.page === 'transactions') await loadTransactions('Pending');
       if(state.page === 'settings'){ await loadEsewaSetting(); await loadMinWithdrawal(); }
       if(state.page === 'support'){ state.activeConversation = null; await loadConversations(); }
       if(state.page === 'admins') await loadSupportAdmins();
-      if(state.page === 'dashboard') await loadAnalytics();
+      if(state.page === 'dashboard'){ await loadAnalytics(); await loadSuspiciousActivity(); }
+      if(state.page === 'guestTickets') await loadGuestTickets();
       if(state.page === 'players') await loadPlayers(state.playerSearch);
       render();
     };
@@ -1012,6 +1146,44 @@ function attachEvents(){
     };
   });
 
+  // Resolve guest ticket
+  app.querySelectorAll('[data-resolveticket]').forEach(btn => {
+    btn.onclick = async () => {
+      const reply = prompt('Optional note (visible only to you):') || '';
+      try{
+        await api('/support/guest-tickets/' + btn.dataset.resolveticket, 'PUT', { adminReply: reply, status: 'Resolved' });
+        showToast('Ticket marked resolved');
+        await loadGuestTickets();
+        render();
+      }catch(e){ showToast(e.message, true); }
+    };
+  });
+
+  // Edit wallet - open modal
+  app.querySelectorAll('[data-editwallet]').forEach(btn => {
+    btn.onclick = () => {
+      state.editingPlayer = { _id: btn.dataset.editwallet, name: btn.dataset.wname, walletBalance: Number(btn.dataset.wbalance) };
+      state.modal = 'editWallet';
+      render();
+    };
+  });
+
+  const saveWalletEditBtn = document.getElementById('saveWalletEditBtn');
+  if(saveWalletEditBtn) saveWalletEditBtn.onclick = async () => {
+    const newBalance = Number(document.getElementById('newWalletBalance').value);
+    const reason = document.getElementById('walletEditReason').value.trim();
+    const err = document.getElementById('err');
+    if(isNaN(newBalance) || newBalance < 0){ err.textContent = 'Enter a valid balance'; err.style.display='block'; return; }
+    if(!reason){ err.textContent = 'A reason is required for the audit log'; err.style.display='block'; return; }
+    try{
+      await api('/auth/admin/players/' + state.editingPlayer._id + '/wallet', 'PUT', { newBalance, reason });
+      showToast('Wallet updated! ✅');
+      state.modal = null; state.editingPlayer = null;
+      await loadPlayers(state.playerSearch);
+      render();
+    }catch(e){ err.textContent = e.message; err.style.display='block'; }
+  };
+
   const logoutBtn = document.getElementById('logoutBtn');
   if(logoutBtn) logoutBtn.onclick = () => { ls_clear(); state.token=null; state.user=null; render(); };
 
@@ -1025,12 +1197,13 @@ function attachEvents(){
       render();
       const box = document.getElementById('adminChatMessages');
       if(box) box.scrollTop = box.scrollHeight;
+      startAdminChatPolling();
     };
   });
 
   // Mobile: back button to return to conversation list
   const chatBackBtn = document.getElementById('chatBackBtn');
-  if(chatBackBtn) chatBackBtn.onclick = () => { state.activeConversation = null; render(); };
+  if(chatBackBtn) chatBackBtn.onclick = () => { stopAdminChatPolling(); state.activeConversation = null; render(); };
 
   // Support chat: attach image
   const adminChatAttachBtn = document.getElementById('adminChatAttachBtn');
@@ -1368,6 +1541,7 @@ async function setupPushNotifications(){
     } else {
       state.page = 'dashboard';
       await loadAnalytics();
+      await loadSuspiciousActivity();
     }
     setTimeout(setupPushNotifications, 1500);
   }
